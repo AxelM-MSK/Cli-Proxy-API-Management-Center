@@ -1,0 +1,473 @@
+@use '../../../styles/mixins' as *;
+
+/* ============================================================
+ * Ledger view: provider totals strip + credential rows grouped by provider.
+ * Same surface recipe as the quota card (14px radius / 1px border / 82% paper);
+ * telemetry is mono + tabular-nums throughout.
+ * ============================================================ */
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* ---------- level colors (shared by segments and row tracks) ---------- */
+
+.levelHigh {
+  background: var(--viz-success);
+}
+
+.levelMedium {
+  background: var(--quota-medium-color);
+}
+
+.levelLow {
+  background: var(--viz-failure);
+}
+
+.levelUnknown {
+  background: transparent;
+}
+
+/* ---------- summary strip ---------- */
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  overflow: hidden;
+}
+
+.summaryCell {
+  @include button-reset;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+  /* Right + bottom hairlines; the strip clips the outer ones, so a wrapped
+     strip still gets a rule between its lines. */
+  box-shadow:
+    1px 0 0 var(--border-color),
+    0 1px 0 var(--border-color);
+  transition: background-color var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .summaryCell:hover {
+    background: color-mix(in srgb, var(--bg-tertiary) 45%, transparent);
+  }
+}
+
+.summaryHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+
+  img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+  }
+}
+
+.iconFallback {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.summaryName {
+  font-size: 13.5px;
+  font-weight: 650;
+  @include text-ellipsis;
+}
+
+.summaryCount {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  @include text-ellipsis;
+}
+
+.summaryFigure {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryTotal {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.summaryCapacity {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.segments {
+  display: flex;
+  gap: 4px;
+  height: 4px;
+}
+
+.segment {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 6px;
+  border-radius: $radius-full;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  overflow: hidden;
+}
+
+.segmentFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  transition: width 360ms var(--ease-out-strong, ease);
+}
+
+.summaryFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 650;
+  }
+}
+
+/* ---------- reset line (summary + rows) ---------- */
+
+.reset,
+.resetMuted {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  @include text-ellipsis;
+}
+
+.resetRelative {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+/* ---------- provider groups ---------- */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.groupTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.groupCount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(0, 3fr) auto;
+  align-items: center;
+  gap: 12px 24px;
+  padding: 14px 4px;
+  border-top: 1px solid var(--border-color);
+  min-width: 0;
+
+  &:last-child {
+    border-bottom: 1px solid var(--border-color);
+  }
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fileName {
+  font-family: $font-mono;
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  @include text-ellipsis;
+}
+
+.plan {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  @include text-ellipsis;
+
+  strong {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+}
+
+.meters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 22px;
+  min-width: 0;
+}
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.meterHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.meterLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  @include text-ellipsis;
+}
+
+.meterPercent {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  height: 4px;
+  border-radius: $radius-full;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  overflow: hidden;
+}
+
+.trackFill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 360ms var(--ease-out-strong, ease);
+}
+
+.resetsCount {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.idle {
+  @include button-reset;
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  justify-self: start;
+  padding: 6px 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .idle:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
+}
+
+.skeleton {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.skeletonBar {
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  animation: ledger-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes ledger-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.error {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger-color);
+  overflow-wrap: anywhere;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.action {
+  @include button-reset;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: $radius-full;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .action:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--bg-tertiary) 55%, transparent);
+  }
+}
+
+.spinning {
+  animation: ledger-spin 0.8s linear infinite;
+}
+
+@keyframes ledger-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- responsive ---------- */
+
+@include tablet {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .meters {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@include mobile {
+  .meters,
+  .skeleton {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summaryCell,
+  .action,
+  .segmentFill,
+  .trackFill {
+    transition: none;
+  }
+
+  .skeletonBar,
+  .spinning {
+    animation: none;
+  }
+}

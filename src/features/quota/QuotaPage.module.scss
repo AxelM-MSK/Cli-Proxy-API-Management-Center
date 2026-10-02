@@ -142,6 +142,13 @@
   }
 }
 
+/* 视图切换（账本 / 卡片）：与排序同外观，挂在 tabs 行末。 */
+.viewSelect {
+  min-width: 120px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .clearSearch:hover,
   .sort button[aria-haspopup='listbox']:hover {

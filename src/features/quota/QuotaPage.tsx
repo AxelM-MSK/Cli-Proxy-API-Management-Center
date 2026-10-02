@@ -21,19 +21,23 @@ import { useNow } from '@/hooks/useNow';
 import { useRevealGroup } from '@/hooks/motion';
 import { useAuthStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getQuotaCacheKey } from '@/utils/quota/identity';
+import { getQuotaCacheKey, getQuotaDisplayName } from '@/utils/quota/identity';
 import { ProviderTabs } from '@/features/authFiles/components/ProviderTabs';
 import { QuotaHeader } from './components/QuotaHeader';
 import { QuotaCard } from './components/QuotaCard';
+import { QuotaLedger } from './components/QuotaLedger';
 import { QuotaTimeline } from './components/QuotaTimeline';
 import {
   CARD_ENTRANCE_BUDGET_MS,
   QUOTA_PAGE_SIZE,
   QUOTA_SORT_MODES,
   QUOTA_TAB_ORDER,
+  QUOTA_VIEW_MODES,
   type QuotaSortMode,
   type QuotaTabId,
+  type QuotaViewMode,
 } from './constants';
+import { maskEmails } from './ledgerModel';
 import {
   buildTabCounts,
   canRefreshQuotaAfterList,
@@ -58,9 +62,11 @@ const SKELETON_CARD_COUNT = 6;
 
 /**
  * Existing providers display filenames; Devin's card and timeline share an
- * identity-aware display label. Keep the filename fallback stable for memoization.
+ * identity-aware display label. Keep both callbacks stable for memoization.
  */
-const displayNameFor = (name: string) => name;
+const plainName = (name: string) => name;
+const plainFileName = (file: AuthFileItem) => getQuotaDisplayName(file);
+const maskedFileName = (file: AuthFileItem) => maskEmails(getQuotaDisplayName(file));
 
 export function QuotaPage() {
   const { t } = useTranslation();
@@ -73,6 +79,12 @@ export function QuotaPage() {
   const [tab, setTab] = useState<QuotaTabId>(() => readQuotaUiState()?.tab ?? 'all');
   const [sortMode, setSortMode] = useState<QuotaSortMode>(
     () => readQuotaUiState()?.sortMode ?? 'default'
+  );
+  const [viewMode, setViewMode] = useState<QuotaViewMode>(
+    () => readQuotaUiState()?.viewMode ?? 'ledger'
+  );
+  const [showEmails, setShowEmails] = useState<boolean>(
+    () => readQuotaUiState()?.showEmails ?? false
   );
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -205,6 +217,29 @@ export function QuotaPage() {
     [t]
   );
 
+  const handleViewModeChange = useCallback((next: string) => {
+    setViewMode(next as QuotaViewMode);
+    writeQuotaUiState({ viewMode: next as QuotaViewMode });
+  }, []);
+
+  const viewOptions = useMemo(
+    () =>
+      QUOTA_VIEW_MODES.map((mode) => ({ value: mode, label: t(`quota_management.view_${mode}`) })),
+    [t]
+  );
+
+  const handleToggleEmails = useCallback(() => {
+    const next = !showEmails;
+    setShowEmails(next);
+    writeQuotaUiState({ showEmails: next });
+  }, [showEmails]);
+
+  const fileNameFor = showEmails ? plainFileName : maskedFileName;
+  const timelineNameFor = useMemo(() => (showEmails ? plainName : maskEmails), [showEmails]);
+
+  // Provider totals cover the whole tab, not just the visible page or search hits.
+  const summaryEntries = useMemo(() => filterEntriesByTab(entries, tab), [entries, tab]);
+
   const { loadedCount, attentionCount } = useMemo(() => {
     let loaded = 0;
     let attention = 0;
@@ -321,6 +356,8 @@ export function QuotaPage() {
         refreshing={loading || batchLoading}
         disableControls={disableControls}
         onRefreshAll={handleRefreshAll}
+        showEmails={showEmails}
+        onToggleEmails={handleToggleEmails}
       />
 
       <section className={styles.workbench}>
@@ -333,6 +370,15 @@ export function QuotaPage() {
             resolvedTheme={resolvedTheme}
             onChange={handleTabChange}
           />
+          <div className={`${styles.sort} ${styles.viewSelect}`}>
+            <Select
+              value={viewMode}
+              options={viewOptions}
+              onChange={handleViewModeChange}
+              ariaLabel={t('quota_management.view_label')}
+              size="sm"
+            />
+          </div>
         </div>
 
         <div className={styles.toolbar}>
@@ -413,6 +459,19 @@ export function QuotaPage() {
               )
             }
           />
+        ) : viewMode === 'ledger' ? (
+          <QuotaLedger
+            entries={pageItems}
+            summaryEntries={summaryEntries}
+            quotaFor={getQuota}
+            displayNameFor={fileNameFor}
+            resolvedTheme={resolvedTheme}
+            canUseActions={canUseActions}
+            resettingQuotaName={resettingQuotaName}
+            onRefresh={(entry) => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+            onReset={(entry) => resetQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+            onSelectProvider={handleTabChange}
+          />
         ) : (
           <div className={styles.grid}>
             {pageItems.map((entry, index) => (
@@ -420,6 +479,7 @@ export function QuotaPage() {
                 key={`${entry.type}:${getQuotaCacheKey(entry.file)}`}
                 entry={entry}
                 quota={getQuota(entry)}
+                displayName={fileNameFor(entry.file)}
                 resolvedTheme={resolvedTheme}
                 canRefresh={canUseActions && !entry.file.disabled}
                 resetting={resettingQuotaName === getQuotaCacheKey(entry.file)}
@@ -463,7 +523,7 @@ export function QuotaPage() {
         <QuotaTimeline
           entries={pageItems}
           quotaFor={getQuota}
-          displayNameFor={displayNameFor}
+          displayNameFor={timelineNameFor}
           resolvedTheme={resolvedTheme}
         />
       </section>
