@@ -59,7 +59,7 @@ import { readQuotaUiState, writeQuotaUiState } from './uiState';
 import styles from './QuotaPage.module.scss';
 
 const TAB_IDS: string[] = ['all', ...QUOTA_TAB_ORDER];
-const SKELETON_CARD_COUNT = 6;
+const SKELETON_CARD_COUNT = 8; // ledger: matches the 8-row ledger page
 
 /**
  * Existing providers display filenames; Devin's card and timeline share an
