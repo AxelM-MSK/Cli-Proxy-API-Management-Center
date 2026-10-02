@@ -59,7 +59,8 @@ import { readQuotaUiState, writeQuotaUiState } from './uiState';
 import styles from './QuotaPage.module.scss';
 
 const TAB_IDS: string[] = ['all', ...QUOTA_TAB_ORDER];
-const SKELETON_CARD_COUNT = 6;
+// Upstream: show a fuller skeleton grid while files load.
+const SKELETON_CARD_COUNT = 9;
 
 /**
  * Existing providers display filenames; Devin's card and timeline share an
