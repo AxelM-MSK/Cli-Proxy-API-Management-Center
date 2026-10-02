@@ -32,6 +32,8 @@ concurrency:
 env:
   UPSTREAM: https://github.com/router-for-me/Cli-Proxy-API-Management-Center.git
   BRANCH: ledger
+  # gh prefers a remote named "upstream"; pin every gh call to this fork.
+  GH_REPO: ${{ github.repository }}
 
 jobs:
   sync:
