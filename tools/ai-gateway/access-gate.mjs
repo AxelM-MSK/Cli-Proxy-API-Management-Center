@@ -6,6 +6,7 @@
 // for management and Foundry-usage calls, swaps in the real management key so
 // the browser never sees or needs it.
 //
+//   /v1/_msk/quota                -> answered here (gateway API key; read-only Ledger quota)
 //   /v1/*                         -> 8317 untouched (per-user API keys; Access bypassed)
 //   /_bridge/auth/whoami          -> answered here (signed-in email, for auto-login)
 //   /_bridge/cursor/*             -> 8319 (signed-in only; bridge key auth as before)
@@ -73,7 +74,80 @@ async function accessUser(req) {
 
 /* ------------------------------------------------------------ routing */
 
+/* ------------------------------------------------- Ledger quota for API-key clients */
+
+// GET /v1/_msk/quota: subscription quota (Claude / Codex usage windows) for clients that hold a
+// gateway API key but cannot pass Cloudflare Access, e.g. the msk terminal agent. Read-only;
+// the management key is used here on the VM and never returned. Cached for 60 s.
+const QUOTA_SOURCES = {
+  claude: {
+    url: 'https://api.anthropic.com/api/oauth/usage',
+    header: { 'User-Agent': 'claude-cli/2.1.280 (external, cli)', Authorization: 'Bearer $TOKEN$', 'Content-Type': 'application/json', 'anthropic-beta': 'oauth-2025-04-20' },
+  },
+  codex: {
+    url: 'https://chatgpt.com/backend-api/wham/usage',
+    header: { Authorization: 'Bearer $TOKEN$', 'Content-Type': 'application/json', 'User-Agent': 'codex-tui/0.149.1 (codex-tui; 0.149.1)' },
+  },
+};
+
+function local(method, path, auth, body) {
+  return new Promise((resolve, reject) => {
+    const r = httpRequest({ host: HOST, port: UPSTREAM.gateway, method, path, headers: { authorization: auth, 'content-type': 'application/json' } }, (up) => {
+      let text = '';
+      up.on('data', (d) => (text += d));
+      up.on('end', () => resolve({ status: up.statusCode ?? 0, text }));
+    });
+    r.on('error', reject);
+    r.setTimeout(30_000, () => r.destroy(new Error('timeout')));
+    if (body) r.write(JSON.stringify(body));
+    r.end();
+  });
+}
+
+const maskEmail = (e) => (typeof e === 'string' && e.includes('@') ? `${e.slice(0, 2)}***@${e.split('@')[1]}` : undefined);
+
+async function buildQuota() {
+  const mgmt = `Bearer ${MGMT_KEY}`;
+  const files = JSON.parse((await local('GET', '/v0/management/auth-files', mgmt)).text).files ?? [];
+  const accounts = [];
+  for (const f of files) {
+    const src = QUOTA_SOURCES[f.type];
+    if (!src || f.disabled) continue;
+    const header = { ...src.header };
+    if (f.type === 'codex' && f.id_token?.chatgpt_account_id) header['Chatgpt-Account-Id'] = f.id_token.chatgpt_account_id;
+    const entry = { provider: f.type, account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
+    try {
+      const r = JSON.parse((await local('POST', '/v0/management/api-call', mgmt, { authIndex: f.auth_index, method: 'GET', url: src.url, header })).text);
+      const status = Number(r.status_code ?? 0);
+      const body = typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
+      if (status >= 200 && status < 300) {
+        entry.usage =
+          f.type === 'claude'
+            ? Object.fromEntries(Object.entries(body ?? {}).filter(([, v]) => v && typeof v === 'object' && 'utilization' in v))
+            : { plan_type: body?.plan_type, rate_limit: body?.rate_limit, credits: body?.credits };
+      } else entry.error = `upstream ${status}`;
+    } catch (e) {
+      entry.error = String(e.message ?? e).slice(0, 200);
+    }
+    accounts.push(entry);
+  }
+  return { observedAt: new Date().toISOString(), accounts };
+}
+
+let quotaCache = { at: 0, body: null };
+async function quota(req, res) {
+  const auth = req.headers.authorization ?? '';
+  // Valid gateway API key = the gateway itself accepts it.
+  if (!/^Bearer \S{8,}$/.test(auth) || (await local('GET', '/v1/models', auth).catch(() => ({ status: 0 }))).status !== 200) {
+    return deny(res, 401, 'valid gateway API key required');
+  }
+  if (!quotaCache.body || Date.now() - quotaCache.at > 60_000) quotaCache = { at: Date.now(), body: await buildQuota() };
+  res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(quotaCache.body));
+}
+
 function route(path) {
+  if (path === '/v1/_msk/quota') return { local: 'quota', open: true };
   if (path === '/v1' || path.startsWith('/v1/')) return { port: UPSTREAM.gateway, open: true };
   if (path === '/_bridge/auth/whoami') return { local: 'whoami' };
   if (path.startsWith('/_bridge/cursor/')) return { port: UPSTREAM.cursor };
@@ -102,6 +176,10 @@ const server = createServer(async (req, res) => {
   if (!target.open) {
     user = await accessUser(req);
     if (!user) return deny(res, 401, 'sign in through Microsoft (Cloudflare Access) required');
+  }
+  if (target.local === 'quota') {
+    if (req.method !== 'GET') return deny(res, 405, 'GET only');
+    return quota(req, res).catch(() => deny(res, 502, 'quota unavailable'));
   }
   if (target.local === 'whoami') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
