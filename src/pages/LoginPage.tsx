@@ -8,6 +8,7 @@ import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { IconEye, IconEyeOff } from '@/components/ui/icons';
 import { useAuthStore, useLanguageStore, useNotificationStore } from '@/stores';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
+import { detectGatewaySso, GATEWAY_SSO_KEY } from '@/utils/gatewaySso';
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
 import { isSupportedLanguage } from '@/utils/language';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
@@ -129,7 +130,20 @@ export function LoginPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        const autoLoggedIn = await restoreSession();
+        let autoLoggedIn = await restoreSession();
+        // Behind an access-gated gateway the Microsoft sign-in is the login.
+        if (!autoLoggedIn && (await detectGatewaySso(detectedBase))) {
+          try {
+            await login({
+              apiBase: detectedBase,
+              managementKey: GATEWAY_SSO_KEY,
+              rememberPassword: false,
+            });
+            autoLoggedIn = true;
+          } catch {
+            // fall back to the key form
+          }
+        }
         if (autoLoggedIn) {
           setAutoLoginSuccess(true);
           // 延迟跳转，让用户看到成功动画

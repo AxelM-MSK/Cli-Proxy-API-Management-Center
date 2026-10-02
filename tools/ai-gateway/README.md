@@ -7,9 +7,10 @@ Shared CLIProxyAPI gateway on openclaw-vm, reached through a Cloudflare Tunnel.
 | CLIProxyAPI (`install-gateway.sh`) | `/opt/cliproxy`, `cliproxy.service`, user `cliproxy` | 127.0.0.1:8317 |
 | Cursor bridge (`cursor-bridge.mjs`) | `/opt/cliproxy/cursor-bridge`, `cursor-bridge.service` | 127.0.0.1:8319 |
 | Foundry usage (`foundry-usage.mjs`) | `/opt/cliproxy/foundry-usage`, `foundry-usage.service` | 127.0.0.1:8320 |
+| Access gate (`access-gate.mjs`) | `/opt/cliproxy/access-gate`, `access-gate.service` | 127.0.0.1:8316 |
 | Tunnel (`cloudflare.mjs create`) | `cloudflared.service`, tunnel `openclaw-ai-gateway` | outbound only |
 
-Routing (tunnel ingress): `/_bridge/cursor/*` -> 8319, `/_bridge/foundry/*` -> 8320, everything else -> 8317.
+Routing: the tunnel sends the whole host to access-gate, which verifies the Cloudflare Access JWT (RS256, console app audience, allowed emails) on everything except `/v1/*`, injects the management key for `/v8/management/*` and `/_bridge/foundry/*`, and routes `/_bridge/cursor/*` to 8319, `/_bridge/foundry/*` to 8320, the rest to 8317. The console auto-logs in via `/_bridge/auth/whoami`, so Microsoft sign-in is the only login.
 
 Access (Cloudflare Zero Trust, Entra sign-in): the whole host requires sign-in as
 AxelM@musculoskeletalmso.com, mso@musculoskeletalmso.com or yoomd@sdneurosurgery.com,

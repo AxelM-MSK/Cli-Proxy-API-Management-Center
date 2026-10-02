@@ -55,13 +55,13 @@ async function create() {
   if (!tunnel) tunnel = await cf('POST', `/accounts/${ACCOUNT}/cfd_tunnel`, { name: TUNNEL_NAME, config_src: 'cloudflare' });
   console.log('tunnel:', tunnel.id);
 
-  // 2. Ingress: bridges by path, everything else to the gateway, then 404.
+  // 2. Ingress: the whole host to access-gate, then 404.
   await cf('PUT', `/accounts/${ACCOUNT}/cfd_tunnel/${tunnel.id}/configurations`, {
     config: {
       ingress: [
-        { hostname: HOST, path: '^/_bridge/cursor/', service: 'http://127.0.0.1:8319' },
-        { hostname: HOST, path: '^/_bridge/foundry/', service: 'http://127.0.0.1:8320' },
-        { hostname: HOST, service: 'http://127.0.0.1:8317' },
+        // Everything goes through access-gate (8316), which verifies the Access JWT
+        // and routes to the gateway, the Cursor bridge and Foundry usage itself.
+        { hostname: HOST, service: 'http://127.0.0.1:8316' },
         { service: 'http_status:404' },
       ],
     },
