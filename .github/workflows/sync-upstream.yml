@@ -14,6 +14,9 @@ name: Sync upstream and release
 on:
   schedule:
     - cron: '17 9 * * *' # daily, 09:17 UTC
+  # A merged fixer PR (from the Hermes merge-fixer on openclaw-vm) releases at once.
+  push:
+    branches: [ledger]
   workflow_dispatch:
     inputs:
       force_release:
