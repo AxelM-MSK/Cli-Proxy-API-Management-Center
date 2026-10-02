@@ -42,6 +42,8 @@ import { QUOTA_ADAPTERS, type QuotaCardState } from '../providers';
 import type { QuotaProviderType } from '../providers/types';
 import { useClaudeResetGrants } from '../providers/claude/ClaudeResetGrants';
 import { getCodexPlanLabel } from '../providers/codex/planLabel';
+import { pickCursorHeadline } from '../cursorBridge';
+import type { CursorBridgeQuotaState } from '../hooks/useCursorBridgeQuota';
 import { QUOTA_PROGRESS_HIGH_THRESHOLD, QUOTA_PROGRESS_MEDIUM_THRESHOLD } from './QuotaMeter';
 import styles from './QuotaLedger.module.scss';
 
@@ -414,6 +416,121 @@ function LedgerRow(props: LedgerRowProps) {
   );
 }
 
+/* ----------------------------------------------------------------- cursor */
+
+const formatDollars = (cents: number | null) =>
+  cents === null ? null : `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+function CursorSummaryCell({ state, now }: { state: CursorBridgeQuotaState; now: number }) {
+  const { t } = useTranslation();
+  const data = state.status === 'absent' ? null : state.data;
+  const headline = data ? pickCursorHeadline(data.meters) : null;
+  const secondary = data?.meters.find((meter) => meter !== headline && meter.id === 'total') ??
+    data?.meters.find((meter) => meter !== headline) ?? null;
+
+  return (
+    <div className={`${styles.summaryCell} ${styles.summaryStatic}`}>
+      <span className={styles.summaryHead}>
+        <span className={styles.icon}>
+          <span className={styles.iconFallback}>C</span>
+        </span>
+        <span className={styles.summaryName}>Cursor</span>
+        <span className={styles.summaryCount}>
+          {t('quota_management.ledger_credentials', { count: 1 })}
+        </span>
+      </span>
+      {headline ? (
+        <>
+          <span className={styles.summaryLabel}>{headline.label}</span>
+          <span className={styles.summaryFigure}>
+            <span className={styles.summaryTotal}>{formatPercent(headline.remaining)}</span>
+            <span className={styles.summaryCapacity}>
+              {t('quota_management.ledger_of_capacity', { capacity: 100 })}
+            </span>
+          </span>
+          <SegmentBar segments={[headline.remaining]} />
+          <ResetLine atMs={headline.resetAtMs} now={now} />
+          {secondary && (
+            <span className={styles.summaryFooter}>
+              <span>{secondary.label}</span>
+              <strong>{formatPercent(secondary.remaining)}</strong>
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <span className={styles.summaryLabel}>
+            {state.status === 'error' ? state.error : t('quota_management.ledger_not_loaded')}
+          </span>
+          <span className={styles.summaryFigure}>
+            <span className={styles.summaryTotal}>--</span>
+          </span>
+          <SegmentBar segments={[null]} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function CursorRow(props: {
+  state: CursorBridgeQuotaState;
+  maskText: (text: string) => string;
+  now: number;
+  onRefresh: () => void;
+}) {
+  const { state, maskText, now, onRefresh } = props;
+  const { t } = useTranslation();
+  const data = state.status === 'absent' ? null : state.data;
+  const loading = state.status === 'loading';
+  const spent = formatDollars(data?.spend.totalCents ?? null);
+  const included = formatDollars(data?.spend.includedCents ?? null);
+
+  return (
+    <div className={styles.row} aria-busy={loading || undefined}>
+      <div className={styles.identity}>
+        <span className={styles.fileName}>
+          {data?.email ? maskText(`cursor-${data.email}`) : 'cursor'}
+        </span>
+        <span className={styles.plan}>
+          {data?.plan && <strong>{data.plan}</strong>}
+          {spent && (
+            <span>
+              {data?.plan ? ' · ' : ''}
+              {t('quota_management.cursor_spend', { spent, included: included ?? '--' })}
+            </span>
+          )}
+        </span>
+      </div>
+      <div className={styles.meters}>
+        {data && data.meters.length > 0 ? (
+          data.meters.slice(0, ROW_METER_LIMIT).map((meter) => (
+            <MeterCell key={meter.id} meter={meter} now={now} />
+          ))
+        ) : loading ? (
+          <div className={styles.skeleton}>
+            {[0, 1, 2].map((index) => (
+              <span key={index} className={styles.skeletonBar} aria-hidden="true" />
+            ))}
+          </div>
+        ) : (
+          <div className={styles.resetMuted}>{t('quota_management.ledger_not_loaded')}</div>
+        )}
+        {state.status === 'error' && (
+          <div className={styles.error} role="alert">
+            {state.error}
+          </div>
+        )}
+      </div>
+      <div className={styles.actions}>
+        <button type="button" className={styles.action} onClick={onRefresh} disabled={loading}>
+          <IconRefreshCw size={12} className={loading ? styles.spinning : undefined} />
+          {t('auth_files.quota_refresh_single')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------- page */
 
 export interface QuotaLedgerProps {
@@ -429,6 +546,12 @@ export interface QuotaLedgerProps {
   onRefresh: (entry: QuotaFileEntry) => void;
   onReset: (entry: QuotaFileEntry) => void;
   onSelectProvider: (provider: QuotaProviderType) => void;
+  /** Cursor via the local bridge; omitted when no bridge is configured. */
+  cursor?: {
+    state: CursorBridgeQuotaState;
+    maskText: (text: string) => string;
+    onRefresh: () => void;
+  };
 }
 
 export function QuotaLedger(props: QuotaLedgerProps) {
@@ -443,9 +566,11 @@ export function QuotaLedger(props: QuotaLedgerProps) {
     onRefresh,
     onReset,
     onSelectProvider,
+    cursor,
   } = props;
   const { t } = useTranslation();
   const now = useNow();
+  const showCursor = cursor !== undefined && cursor.state.status !== 'absent';
 
   const summaries = useMemo(
     () =>
@@ -482,7 +607,7 @@ export function QuotaLedger(props: QuotaLedgerProps) {
 
   return (
     <div className={styles.ledger}>
-      {summaries.length > 0 && (
+      {(summaries.length > 0 || showCursor) && (
         <section className={styles.summary} aria-label={t('quota_management.ledger_summary_label')}>
           {summaries.map((summary) => (
             <SummaryCell
@@ -493,6 +618,7 @@ export function QuotaLedger(props: QuotaLedgerProps) {
               onSelect={onSelectProvider}
             />
           ))}
+          {showCursor && <CursorSummaryCell state={cursor.state} now={now} />}
         </section>
       )}
 
@@ -523,6 +649,23 @@ export function QuotaLedger(props: QuotaLedgerProps) {
           </div>
         </section>
       ))}
+
+      {showCursor && (
+        <section className={styles.group}>
+          <h2 className={styles.groupTitle}>
+            Cursor
+            <span className={styles.groupCount}>1</span>
+          </h2>
+          <div className={styles.rows}>
+            <CursorRow
+              state={cursor.state}
+              maskText={cursor.maskText}
+              now={now}
+              onRefresh={cursor.onRefresh}
+            />
+          </div>
+        </section>
+      )}
     </div>
   );
 }

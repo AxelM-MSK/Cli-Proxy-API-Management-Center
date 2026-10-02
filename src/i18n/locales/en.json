@@ -1565,6 +1565,7 @@
     "ledger_resets_available": "{{count}} available",
     "ledger_reset_index": "Reset {{index}}",
     "ledger_select_provider": "Show only {{provider}}",
+    "cursor_spend": "{{spent}} spent · {{included}} included",
     "meta_credentials": "{{count}} credentials",
     "meta_loaded": "{{count}} loaded",
     "meta_attention": "{{count}} need attention",

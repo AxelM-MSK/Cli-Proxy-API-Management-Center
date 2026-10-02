@@ -1568,6 +1568,7 @@
     "ledger_resets_available": "Доступно: {{count}}",
     "ledger_reset_index": "Сброс {{index}}",
     "ledger_select_provider": "Показать только {{provider}}",
+    "cursor_spend": "Потрачено {{spent}} · включено {{included}}",
     "meta_credentials": "{{count}} учётных данных",
     "meta_loaded": "{{count}} загружено",
     "meta_attention": "{{count}} требуют внимания",

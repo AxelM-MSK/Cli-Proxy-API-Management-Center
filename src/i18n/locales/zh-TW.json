@@ -1589,6 +1589,7 @@
     "ledger_resets_available": "{{count}} 次可用",
     "ledger_reset_index": "重置 {{index}}",
     "ledger_select_provider": "只看 {{provider}}",
+    "cursor_spend": "已用 {{spent}} · 含 {{included}}",
     "meta_credentials": "{{count}} 個憑證",
     "meta_loaded": "{{count}} 個已載入",
     "meta_attention": "{{count}} 個需關注",

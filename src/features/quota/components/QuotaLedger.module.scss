@@ -71,6 +71,17 @@
   }
 }
 
+/* Cursor cell: informational only, no provider tab to switch to. */
+.summaryStatic {
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .summaryStatic:hover {
+    background: transparent;
+  }
+}
+
 .summaryHead {
   display: flex;
   align-items: center;

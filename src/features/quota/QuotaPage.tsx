@@ -54,6 +54,7 @@ import type { QuotaProviderType } from './providers/types';
 import { useDevinQuotaAutoLoad } from './providers/devin/useDevinQuotaAutoLoad';
 import { useQuotaActions } from './hooks/useQuotaActions';
 import { useQuotaBatchLoader } from './hooks/useQuotaBatchLoader';
+import { useCursorBridgeQuota } from './hooks/useCursorBridgeQuota';
 import { readQuotaUiState, writeQuotaUiState } from './uiState';
 import styles from './QuotaPage.module.scss';
 
@@ -280,12 +281,17 @@ export function QuotaPage() {
   const pendingRefreshRef = useRef<number | null>(null);
   const prevLoadingRef = useRef(loading);
 
+  // Cursor 走本地 bridge（非认证文件），只在账本视图的「全部」tab 展示。
+  const cursorVisible = viewMode === 'ledger' && tab === 'all';
+  const { state: cursorState, refresh: refreshCursor } = useCursorBridgeQuota(cursorVisible);
+
   // 刷新全部：先重取文件列表，待其落定（loading 下降沿）再批量拉当前页额度
   const handleRefreshAll = useCallback(() => {
     if (disableControls) return;
     pendingRefreshRef.current = sessionGeneration;
     void loadFiles();
-  }, [disableControls, loadFiles, sessionGeneration]);
+    if (cursorVisible) void refreshCursor();
+  }, [cursorVisible, disableControls, loadFiles, refreshCursor, sessionGeneration]);
 
   useEffect(() => {
     const wasLoading = prevLoadingRef.current;
@@ -471,6 +477,15 @@ export function QuotaPage() {
             onRefresh={(entry) => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
             onReset={(entry) => resetQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
             onSelectProvider={handleTabChange}
+            cursor={
+              cursorVisible
+                ? {
+                    state: cursorState,
+                    maskText: timelineNameFor,
+                    onRefresh: () => void refreshCursor(),
+                  }
+                : undefined
+            }
           />
         ) : (
           <div className={styles.grid}>
