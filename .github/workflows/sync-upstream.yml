@@ -1,0 +1,157 @@
+# Keeps this fork current with router-for-me/Cli-Proxy-API-Management-Center and
+# publishes the Ledger build as a release, which the local CLIProxyAPI core
+# downloads as its management panel (panel-github-repository points here).
+#
+#   main    - exact mirror of upstream main (never commit to it)
+#   ledger  - main + the Ledger/Cursor changes; the default branch
+#
+# Pushing upstream commits that touch .github/workflows needs a token with the
+# "workflows" permission, which GITHUB_TOKEN never has. Add a fine-grained PAT
+# for this repo (Contents: read/write, Workflows: read/write) as the SYNC_TOKEN
+# secret; without it the job still works until upstream edits its workflows.
+name: Sync upstream and release
+
+on:
+  schedule:
+    - cron: '17 9 * * *' # daily, 09:17 UTC
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: Publish a release even if nothing changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/router-for-me/Cli-Proxy-API-Management-Center.git
+  BRANCH: ledger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ledger
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Mirror upstream main
+        id: mirror
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add upstream "$UPSTREAM"
+          git fetch --quiet --tags upstream main
+          git push origin upstream/main:refs/heads/main
+          echo "upstream_sha=$(git rev-parse upstream/main)" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=$(git describe --tags --abbrev=0 upstream/main 2>/dev/null || echo v0.0.0)" >> "$GITHUB_OUTPUT"
+
+      - name: Merge upstream into ledger
+        id: merge
+        run: |
+          set -euo pipefail
+          before=$(git rev-parse HEAD)
+          if ! git merge --no-edit upstream/main; then
+            git diff --name-only --diff-filter=U > conflicts.txt
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "conflict=false" >> "$GITHUB_OUTPUT"
+          echo "changed=$([ "$before" != "$(git rev-parse HEAD)" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Report merge conflict
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Upstream merge conflict"
+          body=$(printf 'Merging upstream main (%s) into `%s` conflicts in:\n\n%s\n\nResolve locally: `git fetch upstream && git checkout %s && git merge upstream/main`, fix, push. The next scheduled run then releases normally.' \
+            "${{ steps.mirror.outputs.upstream_sha }}" "$BRANCH" "$(sed 's/^/- `/; s/$/`/' conflicts.txt)" "$BRANCH")
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then gh issue comment "$existing" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test Ledger and Cursor changes
+        run: bun test tests/quotaLedger.test.ts tests/cursorBridgeQuota.test.ts tests/quotaUiState.test.ts tests/quotaToolbar.test.ts
+
+      - name: Full test suite (informational)
+        continue-on-error: true
+        run: bun run test
+
+      - name: Decide release
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          last=$(gh release view --json targetCommitish --jq .targetCommitish 2>/dev/null || true)
+          if [ "${{ inputs.force_release }}" = "true" ] || [ "$last" != "$head" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${{ steps.mirror.outputs.upstream_tag }}-ledger.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        if: steps.decide.outputs.release == 'true'
+        run: |
+          bun run build
+          mv dist/index.html dist/management.html
+          ls -lh dist/management.html
+        env:
+          VERSION: ${{ steps.decide.outputs.tag }}
+
+      - name: Push merged ledger
+        if: steps.merge.outputs.changed == 'true'
+        run: git push origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Publish release
+        if: steps.decide.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/management.html --clobber
+          else
+            gh release create "$TAG" dist/management.html \
+              --target "$(git rev-parse HEAD)" --latest \
+              --title "$TAG" \
+              --notes "Ledger build on upstream ${{ steps.mirror.outputs.upstream_tag }} (${{ steps.mirror.outputs.upstream_sha }})."
+          fi
+
+      - name: Close resolved conflict issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --state open --search 'in:title "Upstream merge conflict"' --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Merged cleanly in run ${{ github.run_id }}."
+          done
