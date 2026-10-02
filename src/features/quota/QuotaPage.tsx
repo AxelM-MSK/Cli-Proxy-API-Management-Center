@@ -55,6 +55,7 @@ import { useDevinQuotaAutoLoad } from './providers/devin/useDevinQuotaAutoLoad';
 import { useQuotaActions } from './hooks/useQuotaActions';
 import { useQuotaBatchLoader } from './hooks/useQuotaBatchLoader';
 import { useCursorBridgeQuota } from './hooks/useCursorBridgeQuota';
+import { useFoundryUsage } from './hooks/useFoundryUsage';
 import { readQuotaUiState, writeQuotaUiState } from './uiState';
 import styles from './QuotaPage.module.scss';
 
@@ -284,14 +285,18 @@ export function QuotaPage() {
   // Cursor 走本地 bridge（非认证文件），只在账本视图的「全部」tab 展示。
   const cursorVisible = viewMode === 'ledger' && tab === 'all';
   const { state: cursorState, refresh: refreshCursor } = useCursorBridgeQuota(cursorVisible);
+  const { state: foundryState, refresh: refreshFoundry } = useFoundryUsage(cursorVisible);
 
   // 刷新全部：先重取文件列表，待其落定（loading 下降沿）再批量拉当前页额度
   const handleRefreshAll = useCallback(() => {
     if (disableControls) return;
     pendingRefreshRef.current = sessionGeneration;
     void loadFiles();
-    if (cursorVisible) void refreshCursor();
-  }, [cursorVisible, disableControls, loadFiles, refreshCursor, sessionGeneration]);
+    if (cursorVisible) {
+      void refreshCursor();
+      void refreshFoundry();
+    }
+  }, [cursorVisible, disableControls, loadFiles, refreshCursor, refreshFoundry, sessionGeneration]);
 
   useEffect(() => {
     const wasLoading = prevLoadingRef.current;
@@ -484,6 +489,11 @@ export function QuotaPage() {
                     maskText: timelineNameFor,
                     onRefresh: () => void refreshCursor(),
                   }
+                : undefined
+            }
+            foundry={
+              cursorVisible
+                ? { state: foundryState, onRefresh: () => void refreshFoundry() }
                 : undefined
             }
           />

@@ -18,9 +18,13 @@ export type CursorBridgeQuotaState =
  */
 export function useCursorBridgeQuota(enabled: boolean) {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
+  const apiBase = useAuthStore((state) => state.apiBase);
   const config = useConfigStore((state) => state.config);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
-  const target = useMemo(() => findCursorBridge(config?.openaiCompatibility), [config]);
+  const target = useMemo(
+    () => findCursorBridge(config?.openaiCompatibility, apiBase),
+    [apiBase, config]
+  );
   const [state, setState] = useState<CursorBridgeQuotaState>({ status: 'absent' });
   const requestRef = useRef(0);
 

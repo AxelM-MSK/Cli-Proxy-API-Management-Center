@@ -44,6 +44,8 @@ import { useClaudeResetGrants } from '../providers/claude/ClaudeResetGrants';
 import { getCodexPlanLabel } from '../providers/codex/planLabel';
 import { pickCursorHeadline } from '../cursorBridge';
 import type { CursorBridgeQuotaState } from '../hooks/useCursorBridgeQuota';
+import { compactNumber } from '../foundryUsage';
+import type { FoundryUsageState } from '../hooks/useFoundryUsage';
 import { QUOTA_PROGRESS_HIGH_THRESHOLD, QUOTA_PROGRESS_MEDIUM_THRESHOLD } from './QuotaMeter';
 import styles from './QuotaLedger.module.scss';
 
@@ -531,6 +533,118 @@ function CursorRow(props: {
   );
 }
 
+/* ---------------------------------------------------------------- foundry */
+
+const formatMoney = (value: number, currency: string) =>
+  value.toLocaleString(undefined, { style: 'currency', currency, maximumFractionDigits: 2 });
+
+function FoundrySummaryCell({ state }: { state: FoundryUsageState }) {
+  const { t } = useTranslation();
+  const data = state.status === 'absent' ? null : state.data;
+  const tokens = data ? data.totals.inputTokens + data.totals.outputTokens : null;
+
+  return (
+    <div className={`${styles.summaryCell} ${styles.summaryStatic}`}>
+      <span className={styles.summaryHead}>
+        <span className={styles.icon}>
+          <span className={styles.iconFallback}>A</span>
+        </span>
+        <span className={styles.summaryName}>Foundry</span>
+        <span className={styles.summaryCount}>
+          {t('quota_management.foundry_deployments', { count: data?.deployments.length ?? 0 })}
+        </span>
+      </span>
+      <span className={styles.summaryLabel}>{t('quota_management.foundry_month_cost')}</span>
+      <span className={styles.summaryFigure}>
+        <span className={styles.summaryTotal}>
+          {data?.cost ? formatMoney(data.cost.total, data.cost.currency) : '--'}
+        </span>
+        {data?.cost?.stale && (
+          <span className={styles.summaryCapacity}>{t('quota_management.foundry_stale')}</span>
+        )}
+      </span>
+      <span className={styles.reset}>
+        {tokens === null
+          ? state.status === 'error'
+            ? state.error
+            : t('quota_management.ledger_not_loaded')
+          : t('quota_management.foundry_month_tokens', {
+              tokens: compactNumber(tokens),
+              requests: compactNumber(data?.totals.requests ?? 0),
+            })}
+      </span>
+      {data?.costError && <span className={styles.resetMuted}>{data.costError}</span>}
+    </div>
+  );
+}
+
+function StatCell({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className={styles.meter}>
+      <div className={styles.meterHead}>
+        <span className={styles.meterLabel}>{label}</span>
+        <span className={styles.meterPercent}>{value}</span>
+      </div>
+      {hint && <span className={styles.resetMuted}>{hint}</span>}
+    </div>
+  );
+}
+
+function FoundryGroup({ state, onRefresh }: { state: FoundryUsageState; onRefresh: () => void }) {
+  const { t } = useTranslation();
+  const data = state.status === 'absent' ? null : state.data;
+  const loading = state.status === 'loading';
+
+  return (
+    <section className={styles.group}>
+      <h2 className={styles.groupTitle}>
+        Foundry
+        <span className={styles.groupCount}>{data?.deployments.length ?? 0}</span>
+        <button
+          type="button"
+          className={styles.action}
+          onClick={onRefresh}
+          disabled={loading}
+          style={{ marginLeft: 'auto' }}
+        >
+          <IconRefreshCw size={12} className={loading ? styles.spinning : undefined} />
+          {t('auth_files.quota_refresh_single')}
+        </button>
+      </h2>
+      <div className={styles.rows}>
+        {(data?.deployments ?? []).map((row) => (
+          <div key={row.deployment} className={styles.row}>
+            <div className={styles.identity}>
+              <span className={styles.fileName}>{row.deployment}</span>
+              <span className={styles.plan}>
+                {t('quota_management.foundry_requests', { count: Math.round(row.requests) })}
+              </span>
+            </div>
+            <div className={styles.meters}>
+              <StatCell label={t('quota_management.foundry_input')} value={compactNumber(row.inputTokens)} />
+              <StatCell label={t('quota_management.foundry_output')} value={compactNumber(row.outputTokens)} />
+              <StatCell
+                label={t('quota_management.foundry_last24h')}
+                value={compactNumber(row.last24hTokens)}
+                hint={t('quota_management.foundry_requests', { count: Math.round(row.last24hRequests) })}
+              />
+            </div>
+            <div className={styles.actions} />
+          </div>
+        ))}
+        {data && data.deployments.length === 0 && (
+          <div className={styles.resetMuted}>{t('quota_management.foundry_idle')}</div>
+        )}
+        {state.status === 'error' && (
+          <div className={styles.error} role="alert">
+            {state.error}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /* ------------------------------------------------------------------- page */
 
 export interface QuotaLedgerProps {
@@ -552,6 +666,11 @@ export interface QuotaLedgerProps {
     maskText: (text: string) => string;
     onRefresh: () => void;
   };
+  /** Foundry usage from the gateway sidecar; omitted or absent hides it. */
+  foundry?: {
+    state: FoundryUsageState;
+    onRefresh: () => void;
+  };
 }
 
 export function QuotaLedger(props: QuotaLedgerProps) {
@@ -567,10 +686,12 @@ export function QuotaLedger(props: QuotaLedgerProps) {
     onReset,
     onSelectProvider,
     cursor,
+    foundry,
   } = props;
   const { t } = useTranslation();
   const now = useNow();
   const showCursor = cursor !== undefined && cursor.state.status !== 'absent';
+  const showFoundry = foundry !== undefined && foundry.state.status !== 'absent';
 
   const summaries = useMemo(
     () =>
@@ -607,7 +728,7 @@ export function QuotaLedger(props: QuotaLedgerProps) {
 
   return (
     <div className={styles.ledger}>
-      {(summaries.length > 0 || showCursor) && (
+      {(summaries.length > 0 || showCursor || showFoundry) && (
         <section className={styles.summary} aria-label={t('quota_management.ledger_summary_label')}>
           {summaries.map((summary) => (
             <SummaryCell
@@ -619,6 +740,7 @@ export function QuotaLedger(props: QuotaLedgerProps) {
             />
           ))}
           {showCursor && <CursorSummaryCell state={cursor.state} now={now} />}
+          {showFoundry && <FoundrySummaryCell state={foundry.state} />}
         </section>
       )}
 
@@ -666,6 +788,8 @@ export function QuotaLedger(props: QuotaLedgerProps) {
           </div>
         </section>
       )}
+
+      {showFoundry && <FoundryGroup state={foundry.state} onRefresh={foundry.onRefresh} />}
     </div>
   );
 }

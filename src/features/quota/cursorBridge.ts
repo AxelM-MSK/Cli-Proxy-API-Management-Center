@@ -29,12 +29,22 @@ export interface CursorQuota {
 
 const LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/i;
 
+/** Same-origin path a central gateway exposes for its loopback-only bridge. */
+export const CURSOR_BRIDGE_GATEWAY_PATH = '/_bridge/cursor/quota';
+
 /**
  * The provider named "cursor" whose base URL is on loopback. A remote base URL is
  * ignored on purpose: the bridge key would otherwise be sent off the machine.
+ *
+ * `apiBase` is the proxy the console is connected to. When that proxy is itself
+ * on loopback (the desktop setup) the browser talks to the bridge directly. When
+ * it is a remote gateway, the bridge's loopback address means the *gateway's*
+ * machine, which the browser cannot reach, so the request goes same-origin via
+ * the gateway's /_bridge/cursor route instead.
  */
 export function findCursorBridge(
-  providers: readonly OpenAIProviderConfig[] | undefined
+  providers: readonly OpenAIProviderConfig[] | undefined,
+  apiBase?: string
 ): CursorBridgeTarget | null {
   const provider = (providers ?? []).find(
     (candidate) =>
@@ -44,6 +54,10 @@ export function findCursorBridge(
   );
   const apiKey = provider?.apiKeyEntries.find((entry) => entry.apiKey)?.apiKey;
   if (!provider || !apiKey) return null;
+  const gateway = (apiBase ?? '').trim().replace(/\/+$/, '');
+  if (/^https:\/\//i.test(gateway) && !LOOPBACK.test(gateway)) {
+    return { quotaUrl: `${gateway}${CURSOR_BRIDGE_GATEWAY_PATH}`, apiKey };
+  }
   const base = provider.baseUrl.replace(/\/+$/, '').replace(/\/v1$/i, '');
   return { quotaUrl: `${base}/quota`, apiKey };
 }
