@@ -24,3 +24,18 @@ Accounts (OAuth files) live only in `/opt/cliproxy/auths`. Cursor CLI login is t
 Add a user: append a key to `access.api-keys` in `/opt/cliproxy/config.yaml` (hot-reloaded)
 and store it as `ai-gateway-key-<name>` in Key Vault. Console access additionally needs
 their email in the Access app policy (`cloudflare.mjs`, `ALLOW`).
+
+## Keyless access for msk (Entra sign-in) and per-person usage
+
+Added 2026-10-02. Configured by the `entra` block in `/opt/cliproxy/access-gate/config.json`.
+
+- **Signing in with a Microsoft token on `/v1`:**
+  - API clients may send a Microsoft Entra access token instead of an API key, either as `Authorization: Bearer` or as `x-api-key`. The token is for app "MSK Agent Kit" (`ae407aea-...`), scope `gateway.use`.
+  - The gate verifies the signature against the tenant keys, the issuer, the tenant, the audience, the scope and the expiry, then checks `entra.allowedUsers` (a list of UPNs, or `"*"`).
+  - It then swaps in that person's own gateway key. The key is created on first use as `sk-msk-u-<name>-...`, appended to `access.api-keys` (CLIProxyAPI hot-reloads), and recorded in `user-keys.json`.
+  - Nobody holds a key, and disabling the Entra account ends access.
+- **Usage:** every `/v1` request is logged to `/opt/cliproxy/access-gate/usage/YYYY-MM-DD.jsonl`.
+  - Each line records the person (Entra users by UPN; key clients by `keyLabels` or a key prefix), the model, the status, and input, cached, cache-write and output tokens, read from the response stream.
+  - `GET /v1/_msk/usage?days=N` returns totals per person. It is for `entra.admins` only and checks their Microsoft token.
+- **Adding a person:** add their UPN to `entra.allowedUsers` and restart `access-gate`. Their key is created automatically the first time they use msk in clean mode.
+- **API keys are unchanged:** existing keys, the bots and Cursor keep working as before.
