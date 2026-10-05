@@ -36,6 +36,9 @@ Added 2026-10-02. Configured by the `entra` block in `/opt/cliproxy/access-gate/
   - Nobody holds a key, and disabling the Entra account ends access.
 - **Usage:** every `/v1` request is logged to `/opt/cliproxy/access-gate/usage/YYYY-MM-DD.jsonl`.
   - Each line records the person (Entra users by UPN; key clients by `keyLabels` or a key prefix), the model, the status, and input, cached, cache-write and output tokens, read from the response stream.
-  - `GET /v1/_msk/usage?days=N` returns totals per person. It is for `entra.admins` only and checks their Microsoft token.
+  - Each line also records the key used, masked (`sk-msk-u-<name>-…last4` or `<first 8>…last4`). The full key is never logged.
+  - `GET /v1/_msk/usage?days=N` returns totals per person (`users`) and per key (`keys`). It is for `entra.admins` only and checks their Microsoft token.
+  - `GET /_bridge/usage?days=N` returns the same report to the console (Microsoft sign-in through Cloudflare Access). The console shows it on the **Gateway Usage** page (`#/usage`): totals, one table per person and one per API key.
+  - The key table lists every key in `access.api-keys`, including unused ones, and flags keys that have traffic but are no longer configured. Lines logged before keys were recorded are attributed via `keyLabels` and `user-keys.json`.
 - **Adding a person:** add their UPN to `entra.allowedUsers` and restart `access-gate`. Their key is created automatically the first time they use msk in clean mode.
 - **API keys are unchanged:** existing keys, the bots and Cursor keep working as before.

@@ -7,7 +7,8 @@
 // the browser never sees or needs it.
 //
 //   /v1/_msk/quota                -> answered here (gateway API key or Entra token; Ledger quota)
-//   /v1/_msk/usage                -> answered here (Entra token of a gateway admin; per-person usage)
+//   /v1/_msk/usage                -> answered here (Entra token of a gateway admin; usage per person and key)
+//   /_bridge/usage                -> answered here (signed-in console users; usage per person and key)
 //   /v1/* with an Entra token     -> token verified, swapped for that person's own key (CONFIG.entra)
 //   /v1/*                         -> 8317 untouched (per-user API keys; Access bypassed)
 //   /_bridge/auth/whoami          -> answered here (signed-in email, for auto-login)
@@ -170,15 +171,42 @@ async function applyEntra(req) {
 const USAGE_DIR = ENTRA?.usageDir ?? '/opt/cliproxy/access-gate/usage';
 const KEY_LABELS = new Map(Object.entries(CONFIG.keyLabels ?? {})); // optional: { "<api key>": "label" }
 
+const GATEWAY_CONFIG = ENTRA?.gatewayConfig ?? CONFIG.gatewayConfig ?? '/opt/cliproxy/config.yaml';
+
+const requestKey = (req) => String(req.headers['x-api-key'] ?? req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+
+/** Non-secret id for an API key: its prefix (with the owner slug for per-person keys) and last 4. */
+export function maskKey(k) {
+  if (!k) return 'none';
+  const prefix = k.match(/^sk-msk-u-[a-z0-9]+-/)?.[0] ?? k.slice(0, Math.min(8, Math.max(k.length - 4, 0)));
+  return `${prefix}…${k.slice(-4)}`;
+}
+
+function readUserKeys() {
+  try { return JSON.parse(readFileSync(ENTRA?.userKeysFile ?? '', 'utf8')); } catch { return {}; }
+}
+
+/** The gateway's client API keys (access.api-keys), or [] if the config cannot be read. */
+function configuredKeys() {
+  try {
+    const m = readFileSync(GATEWAY_CONFIG, 'utf8').match(/^access:\n    api-keys:\n((?:        - "[^"\n]+"\n)+)/m);
+    return m ? [...m[1].matchAll(/- "([^"\n]+)"/g)].map((x) => x[1]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Who a key belongs to: an explicit label, the person it was created for, or nobody known. */
+function keyOwner(k, userKeys = readUserKeys()) {
+  if (KEY_LABELS.has(k)) return KEY_LABELS.get(k);
+  return Object.values(userKeys).find((v) => v.key === k)?.upn ?? null;
+}
+
 function callerLabel(req) {
   if (req.mskUser) return req.mskUser;
-  const k = String(req.headers['x-api-key'] ?? req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+  const k = requestKey(req);
   if (!k) return 'anonymous';
-  if (KEY_LABELS.has(k)) return KEY_LABELS.get(k);
-  let map = {};
-  try { map = JSON.parse(readFileSync(ENTRA?.userKeysFile ?? '', 'utf8')); } catch {}
-  const owner = Object.values(map).find((v) => v.key === k);
-  return owner ? owner.upn : `key:${k.slice(0, 10)}`;
+  return keyOwner(k) ?? `key:${k.slice(0, 10)}`;
 }
 
 const lastInt = (text, names) => {
@@ -203,6 +231,7 @@ function trackUsage(req, up, path) {
     const rec = {
       ts: new Date().toISOString(),
       user: callerLabel(req),
+      key: maskKey(requestKey(req)),
       path,
       model: reqHead().match(/"model"\s*:\s*"([^"]+)"/)?.[1] ?? null,
       status: up.statusCode,
@@ -221,25 +250,71 @@ function trackUsage(req, up, path) {
   });
 }
 
-/** GET /v1/_msk/usage?days=7: per-person totals. Admins only (CONFIG.entra.admins). */
+const emptyTotals = () => ({ requests: 0, errors: 0, inputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0, models: {}, lastUsed: null });
+
+function addRecord(t, r) {
+  t.requests++;
+  if (!(r.status >= 200 && r.status < 400)) t.errors++;
+  t.inputTokens += r.inputTokens ?? 0;
+  t.cachedInputTokens += r.cachedInputTokens ?? 0;
+  t.cacheWriteTokens += r.cacheWriteTokens ?? 0;
+  t.outputTokens += r.outputTokens ?? 0;
+  t.models[r.model ?? '?'] = (t.models[r.model ?? '?'] ?? 0) + 1;
+  if (r.ts && (!t.lastUsed || r.ts > t.lastUsed)) t.lastUsed = r.ts;
+}
+
+/**
+ * Totals per person and per API key over the last `days` days (UTC, today included). Keys are
+ * reported only by their masked id; configured keys with no traffic are listed with zeros.
+ * Records written before keys were logged get their key from the owner, where known.
+ */
+export function summarizeUsage(days, { dir = USAGE_DIR, now = Date.now(), keys = configuredKeys(), userKeys = readUserKeys() } = {}) {
+  const users = {};
+  const byKey = {};
+  const keyEntry = (id, owner) => {
+    const k = (byKey[id] ??= { owner: owner ?? null, configured: false, ...emptyTotals() });
+    if (!k.owner && owner) k.owner = owner;
+    return k;
+  };
+  const ownerToKey = new Map();
+  for (const k of keys) {
+    const owner = keyOwner(k, userKeys);
+    keyEntry(maskKey(k), owner).configured = true;
+    if (owner && !ownerToKey.has(owner)) ownerToKey.set(owner, maskKey(k));
+  }
+  for (const v of Object.values(userKeys)) if (v?.upn && v.key && !ownerToKey.has(v.upn)) ownerToKey.set(v.upn, maskKey(v.key));
+
+  for (let i = 0; i < days; i++) {
+    const day = new Date(now - i * 86_400_000).toISOString().slice(0, 10);
+    let lines = [];
+    try { lines = readFileSync(`${dir}/${day}.jsonl`, 'utf8').trim().split('\n'); } catch { continue; }
+    for (const l of lines) {
+      let r; try { r = JSON.parse(l); } catch { continue; }
+      const who = r.user ?? 'anonymous';
+      const id = r.key ?? ownerToKey.get(who) ?? (who.startsWith('key:') ? `${who.slice(4)}…` : 'unknown');
+      const u = (users[who] ??= { ...emptyTotals(), keys: [] });
+      addRecord(u, r);
+      if (!u.keys.includes(id)) u.keys.push(id);
+      addRecord(keyEntry(id, who.startsWith('key:') ? null : who), r);
+    }
+  }
+  return { days, generatedAt: new Date(now).toISOString(), users, keys: byKey };
+}
+
+const parseDays = (req) => Math.min(Math.max(Number(new URL(req.url, 'http://x').searchParams.get('days')) || 7, 1), 90);
+
+/** GET /v1/_msk/usage?days=7: totals per person and key. Admins only (CONFIG.entra.admins). */
 async function usageReport(req, res) {
   const user = await entraUser(req.headers.authorization);
   if (!user || !(ENTRA.admins ?? []).map((a) => a.toLowerCase()).includes(user.upn)) return deny(res, 403, 'gateway admins only (Microsoft token)');
-  const days = Math.min(Math.max(Number(new URL(req.url, 'http://x').searchParams.get('days')) || 7, 1), 90);
-  const totals = {};
-  for (let i = 0; i < days; i++) {
-    const day = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
-    let lines = [];
-    try { lines = readFileSync(`${USAGE_DIR}/${day}.jsonl`, 'utf8').trim().split('\n'); } catch { continue; }
-    for (const l of lines) {
-      let r; try { r = JSON.parse(l); } catch { continue; }
-      const t = (totals[r.user] ??= { requests: 0, inputTokens: 0, cachedInputTokens: 0, cacheWriteTokens: 0, outputTokens: 0, models: {} });
-      t.requests++; t.inputTokens += r.inputTokens ?? 0; t.cachedInputTokens += r.cachedInputTokens ?? 0; t.cacheWriteTokens += r.cacheWriteTokens ?? 0; t.outputTokens += r.outputTokens ?? 0;
-      t.models[r.model ?? '?'] = (t.models[r.model ?? '?'] ?? 0) + 1;
-    }
-  }
   res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-  res.end(JSON.stringify({ days, users: totals }));
+  res.end(JSON.stringify(summarizeUsage(parseDays(req))));
+}
+
+/** GET /_bridge/usage?days=7: the same report for the console (Cloudflare Access sign-in). */
+function consoleUsageReport(req, res) {
+  res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(summarizeUsage(parseDays(req))));
 }
 
 /* ------------------------------------------------------------ routing */
@@ -321,6 +396,7 @@ function route(path) {
   if (path === '/v1/_msk/usage') return { local: 'usage', open: true };
   if (path === '/v1' || path.startsWith('/v1/')) return { port: UPSTREAM.gateway, open: true };
   if (path === '/_bridge/auth/whoami') return { local: 'whoami' };
+  if (path === '/_bridge/usage') return { local: 'console-usage' };
   if (path.startsWith('/_bridge/cursor/')) return { port: UPSTREAM.cursor };
   if (path.startsWith('/_bridge/foundry/')) return { port: UPSTREAM.foundry, inject: true };
   if (/^\/v\d+\/management(\/|$)/.test(path)) return { port: UPSTREAM.gateway, inject: true };
@@ -357,6 +433,10 @@ const server = createServer(async (req, res) => {
   if (target.local === 'quota') {
     if (req.method !== 'GET') return deny(res, 405, 'GET only');
     return quota(req, res).catch(() => deny(res, 502, 'quota unavailable'));
+  }
+  if (target.local === 'console-usage') {
+    if (req.method !== 'GET') return deny(res, 405, 'GET only');
+    try { return consoleUsageReport(req, res); } catch { return deny(res, 502, 'usage unavailable'); }
   }
   if (target.local === 'whoami') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });

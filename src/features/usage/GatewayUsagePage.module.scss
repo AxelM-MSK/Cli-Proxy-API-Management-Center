@@ -1,0 +1,144 @@
+.container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $spacing-md;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.subtitle {
+  margin: $spacing-xs 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: $spacing-md;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+  padding: $spacing-md;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.statValue {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.count {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 8px;
+  border-radius: $radius-full;
+  background: var(--count-badge-bg);
+  color: var(--count-badge-text);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.models {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.errors {
+  color: var(--error-color);
+  font-size: 11px;
+}
+
+.tag {
+  margin-left: $spacing-xs;
+  padding: 0 6px;
+  border-radius: $radius-full;
+  font-family: inherit;
+  font-size: 11px;
+  background: var(--muted-bg);
+  color: var(--muted-foreground);
+}
+
+.error {
+  padding: $spacing-sm $spacing-md;
+  border-radius: var(--radius-md);
+  background: var(--bg-error-light);
+  color: var(--error-color);
+  font-size: 13px;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

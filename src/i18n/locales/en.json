@@ -107,7 +107,8 @@
     "plugin_store": "Plugin Store",
     "config_management": "Config Panel",
     "logs": "Logs Viewer",
-    "system_info": "Management Center Info"
+    "system_info": "Management Center Info",
+    "gateway_usage": "Gateway Usage"
   },
   "nav_groups": {
     "operate": "Operate",
@@ -127,7 +128,8 @@
     "plugin_store": "Discover & install plugins",
     "logs": "Request tracing",
     "config_management": "Gateway configuration",
-    "system_info": "Runtime & diagnostics"
+    "system_info": "Runtime & diagnostics",
+    "gateway_usage": "Usage per person & key"
   },
   "dashboard": {
     "hero_verdict_good": "All systems steady",
@@ -2250,5 +2252,39 @@
     "unavailable": "Resets are currently unavailable.",
     "rate_limited": "Request rate limited.",
     "auth_error": "Authorization was refused."
+  },
+  "gateway_usage": {
+    "title": "Gateway usage",
+    "subtitle": "Requests and tokens on the AI gateway (/v1), per person and per API key. Keys are shown masked.",
+    "days_label": "Time range",
+    "days_option_one": "Last {{count}} day",
+    "days_option_other": "Last {{count}} days",
+    "refresh": "Refresh",
+    "by_user": "By person",
+    "by_key": "By API key",
+    "people": "People",
+    "active_keys": "Keys used",
+    "col_user": "Person",
+    "col_keys": "Keys",
+    "col_key": "Key",
+    "col_owner": "Owner",
+    "col_requests": "Requests",
+    "col_input": "Input",
+    "col_cached": "Cached",
+    "col_cache_write": "Cache write",
+    "col_output": "Output",
+    "col_total": "Total tokens",
+    "col_models": "Models",
+    "col_last_used": "Last used",
+    "errors_one": "({{count}} failed)",
+    "errors_other": "({{count}} failed)",
+    "never": "Not used in this range",
+    "owner_unknown": "Unknown",
+    "key_removed": "removed",
+    "empty": "No requests in this range",
+    "absent_title": "Usage is not available here",
+    "absent_desc": "Per-person and per-key usage comes from the access gate on the remote gateway (https). This connection does not have it.",
+    "load_failed": "Could not load usage: {{error}}",
+    "generated_at": "Generated {{time}}"
   }
 }
