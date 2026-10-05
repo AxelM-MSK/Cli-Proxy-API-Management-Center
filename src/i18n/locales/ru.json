@@ -107,7 +107,8 @@
     "plugin_store": "Магазин плагинов",
     "config_management": "Панель конфигурации",
     "logs": "Просмотр логов",
-    "system_info": "Информация системы"
+    "system_info": "Информация системы",
+    "gateway_usage": "Использование шлюза"
   },
   "nav_groups": {
     "operate": "Работа",
@@ -126,7 +127,8 @@
     "plugin_store": "Поиск и установка плагинов",
     "logs": "Трассировка запросов",
     "config_management": "Базовая конфигурация шлюза",
-    "system_info": "Состояние и диагностика"
+    "system_info": "Состояние и диагностика",
+    "gateway_usage": "По людям и ключам"
   },
   "dashboard": {
     "hero_verdict_good": "Всё стабильно",
@@ -2244,5 +2246,43 @@
     "unavailable": "Сбросы временно недоступны.",
     "rate_limited": "Слишком много запросов.",
     "auth_error": "Авторизация отклонена."
+  },
+  "gateway_usage": {
+    "title": "Использование шлюза",
+    "subtitle": "Запросы и токены AI-шлюза (/v1) по людям и API-ключам. Ключи показаны в маскированном виде.",
+    "days_label": "Период",
+    "days_option_one": "Последний {{count}} день",
+    "days_option_few": "Последние {{count}} дня",
+    "days_option_many": "Последние {{count}} дней",
+    "days_option_other": "Последние {{count}} дней",
+    "refresh": "Обновить",
+    "by_user": "По людям",
+    "by_key": "По API-ключам",
+    "people": "Люди",
+    "active_keys": "Использованные ключи",
+    "col_user": "Пользователь",
+    "col_keys": "Ключи",
+    "col_key": "Ключ",
+    "col_owner": "Владелец",
+    "col_requests": "Запросы",
+    "col_input": "Вход",
+    "col_cached": "Из кэша",
+    "col_cache_write": "Запись в кэш",
+    "col_output": "Выход",
+    "col_total": "Всего токенов",
+    "col_models": "Модели",
+    "col_last_used": "Последнее использование",
+    "errors_one": "({{count}} ошибка)",
+    "errors_few": "({{count}} ошибки)",
+    "errors_many": "({{count}} ошибок)",
+    "errors_other": "({{count}} ошибок)",
+    "never": "Не использовался за период",
+    "owner_unknown": "Неизвестно",
+    "key_removed": "удалён",
+    "empty": "Нет запросов за период",
+    "absent_title": "Данные об использовании недоступны",
+    "absent_desc": "Использование по людям и ключам берётся из access gate удалённого шлюза (https). У этого подключения его нет.",
+    "load_failed": "Не удалось загрузить данные: {{error}}",
+    "generated_at": "Сформировано {{time}}"
   }
 }

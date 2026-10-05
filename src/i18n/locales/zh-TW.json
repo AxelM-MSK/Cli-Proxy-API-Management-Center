@@ -107,7 +107,8 @@
     "plugin_store": "插件商店",
     "config_management": "設定面板",
     "logs": "記錄檢視",
-    "system_info": "中心資訊"
+    "system_info": "中心資訊",
+    "gateway_usage": "閘道用量"
   },
   "nav_groups": {
     "operate": "運行",
@@ -127,7 +128,8 @@
     "plugin_store": "探索並安裝插件",
     "logs": "請求追蹤與排查",
     "config_management": "閘道基礎設定",
-    "system_info": "運行與診斷資訊"
+    "system_info": "運行與診斷資訊",
+    "gateway_usage": "依人員與金鑰統計"
   },
   "dashboard": {
     "hero_verdict_good": "運行平穩",
@@ -2274,5 +2276,39 @@
     "unavailable": "重置暫不可用。",
     "rate_limited": "請求過於頻繁。",
     "auth_error": "授權遭拒。"
+  },
+  "gateway_usage": {
+    "title": "閘道用量",
+    "subtitle": "AI 閘道 (/v1) 的請求與 token 用量，依人員和 API 金鑰統計。金鑰以遮罩顯示。",
+    "days_label": "時間範圍",
+    "days_option_one": "最近 {{count}} 天",
+    "days_option_other": "最近 {{count}} 天",
+    "refresh": "重新整理",
+    "by_user": "依人員",
+    "by_key": "依 API 金鑰",
+    "people": "人員",
+    "active_keys": "已使用金鑰",
+    "col_user": "人員",
+    "col_keys": "金鑰",
+    "col_key": "金鑰",
+    "col_owner": "擁有者",
+    "col_requests": "請求",
+    "col_input": "輸入",
+    "col_cached": "快取命中",
+    "col_cache_write": "快取寫入",
+    "col_output": "輸出",
+    "col_total": "總 token",
+    "col_models": "模型",
+    "col_last_used": "最近使用",
+    "errors_one": "（{{count}} 次失敗）",
+    "errors_other": "（{{count}} 次失敗）",
+    "never": "此範圍內未使用",
+    "owner_unknown": "未知",
+    "key_removed": "已移除",
+    "empty": "此範圍內沒有請求",
+    "absent_title": "此處無法查看用量",
+    "absent_desc": "依人員和金鑰的用量來自遠端閘道 (https) 的存取閘道，目前連線不提供。",
+    "load_failed": "無法載入用量：{{error}}",
+    "generated_at": "產生於 {{time}}"
   }
 }
