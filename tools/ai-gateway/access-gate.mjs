@@ -291,7 +291,8 @@ export function summarizeUsage(days, { dir = USAGE_DIR, now = Date.now(), keys =
     for (const l of lines) {
       let r; try { r = JSON.parse(l); } catch { continue; }
       const who = r.user ?? 'anonymous';
-      const id = r.key ?? ownerToKey.get(who) ?? (who.startsWith('key:') ? `${who.slice(4)}…` : 'unknown');
+      // 'none' = the request carried no key (same id maskKey gives an empty key).
+      const id = r.key ?? ownerToKey.get(who) ?? (who.startsWith('key:') ? `${who.slice(4)}…` : who === 'anonymous' ? 'none' : 'unknown');
       const u = (users[who] ??= { ...emptyTotals(), keys: [] });
       addRecord(u, r);
       if (!u.keys.includes(id)) u.keys.push(id);
