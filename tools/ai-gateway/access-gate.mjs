@@ -358,10 +358,13 @@ function consoleUsageReport(req, res) {
 // the management key is used here on the VM and never returned. Cached for 60 s.
 const QUOTA_SOURCES = {
   claude: {
+    // Anthropic rate-limits this endpoint hard (429 when polled every minute): ask at most every 5 min.
+    minIntervalMs: 5 * 60_000,
     url: 'https://api.anthropic.com/api/oauth/usage',
     header: { 'User-Agent': 'claude-cli/2.1.280 (external, cli)', Authorization: 'Bearer $TOKEN$', 'Content-Type': 'application/json', 'anthropic-beta': 'oauth-2025-04-20' },
   },
   codex: {
+    minIntervalMs: 60_000,
     url: 'https://chatgpt.com/backend-api/wham/usage',
     header: { Authorization: 'Bearer $TOKEN$', 'Content-Type': 'application/json', 'User-Agent': 'codex-tui/0.149.1 (codex-tui; 0.149.1)' },
   },
@@ -383,32 +386,64 @@ function local(method, path, auth, body) {
 
 const maskEmail = (e) => (typeof e === 'string' && e.includes('@') ? `${e.slice(0, 2)}***@${e.split('@')[1]}` : undefined);
 
+// Last good figures per account, kept on disk so a restart does not blank the page or make every
+// account ask its provider again at once. { "<type>:<auth_index>": { usage, at, nextAt } }
+const QUOTA_STATE_FILE = CONFIG.quotaStateFile ?? '/opt/cliproxy/access-gate/quota-last.json';
+let quotaState = {};
+try { quotaState = JSON.parse(readFileSync(QUOTA_STATE_FILE, 'utf8')) ?? {}; } catch {}
+const RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
+
+/**
+ * One account's quota entry. Asks the provider only when its interval has passed (or after a 429
+ * backoff); otherwise, and when the provider fails, answers with the last good figures marked
+ * `stale` with `usageAt`. An error is reported only when there are no figures at all.
+ */
+async function accountQuota(f, src, mgmt, now) {
+  const id = `${f.type}:${f.auth_index}`;
+  const last = quotaState[id];
+  const entry = { provider: f.type, account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
+  const useLast = (error) => {
+    if (last?.usage) Object.assign(entry, { usage: last.usage, usageAt: last.at, stale: Boolean(error) || undefined });
+    else if (error) entry.error = error;
+    return entry;
+  };
+  if (last && now < (last.nextAt ?? 0)) return useLast(last.error);
+  const header = { ...src.header };
+  if (f.type === 'codex' && f.id_token?.chatgpt_account_id) header['Chatgpt-Account-Id'] = f.id_token.chatgpt_account_id;
+  let error;
+  try {
+    const r = JSON.parse((await local('POST', '/v0/management/api-call', mgmt, { authIndex: f.auth_index, method: 'GET', url: src.url, header })).text);
+    const status = Number(r.status_code ?? 0);
+    const body = typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
+    if (status >= 200 && status < 300) {
+      const usage =
+        f.type === 'claude'
+          ? Object.fromEntries(Object.entries(body ?? {}).filter(([, v]) => v && typeof v === 'object' && 'utilization' in v))
+          : { plan_type: body?.plan_type, rate_limit: body?.rate_limit, credits: body?.credits };
+      quotaState[id] = { usage, at: new Date(now).toISOString(), nextAt: now + src.minIntervalMs };
+      return Object.assign(entry, { usage, usageAt: quotaState[id].at });
+    }
+    error = status === 429 ? 'rate limited by provider' : `upstream ${status}`;
+    quotaState[id] = { ...(last ?? {}), error, nextAt: now + (status === 429 ? RATE_LIMIT_BACKOFF_MS : src.minIntervalMs) };
+  } catch (e) {
+    error = String(e.message ?? e).slice(0, 200);
+    quotaState[id] = { ...(last ?? {}), error, nextAt: now + src.minIntervalMs };
+  }
+  return useLast(error);
+}
+
 async function buildQuota() {
   const mgmt = `Bearer ${MGMT_KEY}`;
+  const now = Date.now();
   const files = JSON.parse((await local('GET', '/v0/management/auth-files', mgmt)).text).files ?? [];
   const accounts = [];
   for (const f of files) {
     const src = QUOTA_SOURCES[f.type];
     if (!src || f.disabled) continue;
-    const header = { ...src.header };
-    if (f.type === 'codex' && f.id_token?.chatgpt_account_id) header['Chatgpt-Account-Id'] = f.id_token.chatgpt_account_id;
-    const entry = { provider: f.type, account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
-    try {
-      const r = JSON.parse((await local('POST', '/v0/management/api-call', mgmt, { authIndex: f.auth_index, method: 'GET', url: src.url, header })).text);
-      const status = Number(r.status_code ?? 0);
-      const body = typeof r.body === 'string' ? JSON.parse(r.body) : r.body;
-      if (status >= 200 && status < 300) {
-        entry.usage =
-          f.type === 'claude'
-            ? Object.fromEntries(Object.entries(body ?? {}).filter(([, v]) => v && typeof v === 'object' && 'utilization' in v))
-            : { plan_type: body?.plan_type, rate_limit: body?.rate_limit, credits: body?.credits };
-      } else entry.error = `upstream ${status}`;
-    } catch (e) {
-      entry.error = String(e.message ?? e).slice(0, 200);
-    }
-    accounts.push(entry);
+    accounts.push(await accountQuota(f, src, mgmt, now));
   }
-  return { observedAt: new Date().toISOString(), accounts };
+  try { writeFileSync(QUOTA_STATE_FILE, JSON.stringify(quotaState), { mode: 0o600 }); } catch {}
+  return { observedAt: new Date(now).toISOString(), accounts };
 }
 
 let quotaCache = { at: 0, body: null };

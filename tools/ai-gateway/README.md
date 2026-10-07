@@ -27,6 +27,8 @@ their email in the Access app policy (`cloudflare.mjs`, `ALLOW`).
 
 Member portal: key `ai-gateway-key-member-portal` (label "member-portal (AI usage page)") reads `/v1/_msk/quota` for the SDN AI usage page (2026-10-07).
 
+Quota (`/v1/_msk/quota`): Claude accounts are asked at most every 5 minutes, Codex every minute; a 429 backs that account off for 15 minutes. The last good figures per account are kept in `/opt/cliproxy/access-gate/quota-last.json` (survives restarts) and returned with `stale: true` and `usageAt` while the provider refuses.
+
 ## Keyless access for msk (Entra sign-in) and per-person usage
 
 Added 2026-10-02. Configured by the `entra` block in `/opt/cliproxy/access-gate/config.json`.
