@@ -127,11 +127,7 @@ function userKey(user) {
     if (map[user.oid]?.key) return map[user.oid].key;
     const slug = user.upn.split('@')[0].replace(/[^a-z0-9]/g, '').slice(0, 24) || 'user';
     const key = `sk-msk-u-${slug}-${randomBytes(18).toString('base64url')}`;
-    const cfg = readFileSync(ENTRA.gatewayConfig, 'utf8');
-    const m = cfg.match(/^access:\n    api-keys:\n((?:        - "[^"\n]+"\n)+)/m);
-    if (!m) throw new Error('gateway config: access.api-keys block not found');
-    const end = m.index + m[0].length;
-    writeFileSync(ENTRA.gatewayConfig, `${cfg.slice(0, end)}        - "${key}"\n${cfg.slice(end)}`, { mode: 0o600 });
+    await addGatewayKey(key);
     map[user.oid] = { upn: user.upn, name: user.name, key, created: new Date().toISOString() };
     writeFileSync(ENTRA.userKeysFile, JSON.stringify(map, null, 1), { mode: 0o600 });
     console.log(`entra: created gateway key for ${user.upn}`);
@@ -186,14 +182,49 @@ function readUserKeys() {
   try { return JSON.parse(readFileSync(ENTRA?.userKeysFile ?? '', 'utf8')); } catch { return {}; }
 }
 
+/**
+ * access.api-keys from the gateway config text, in either layout CLIProxyAPI uses: a block list
+ * (`api-keys:` then `- "key"` lines) or, after the gateway rewrites its own config (management
+ * API saves), a one-line flow list (`api-keys: ["a", "b"]`). [] when neither is found.
+ */
+export function parseAccessKeys(text) {
+  const block = String(text).match(/^access:\r?\n {4}api-keys:\r?\n((?: {8}- "[^"\r\n]+"\r?\n?)+)/m);
+  if (block) return [...block[1].matchAll(/- "([^"\r\n]+)"/g)].map((x) => x[1]);
+  const flow = String(text).match(/^access:\r?\n {4}api-keys: *(\[[^\r\n]*\])/m);
+  if (flow) {
+    try {
+      const list = JSON.parse(flow[1]);
+      return Array.isArray(list) ? list.filter((k) => typeof k === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 /** The gateway's client API keys (access.api-keys), or [] if the config cannot be read. */
 function configuredKeys() {
   try {
-    const m = readFileSync(GATEWAY_CONFIG, 'utf8').match(/^access:\n    api-keys:\n((?:        - "[^"\n]+"\n)+)/m);
-    return m ? [...m[1].matchAll(/- "([^"\n]+)"/g)].map((x) => x[1]) : [];
+    return parseAccessKeys(readFileSync(GATEWAY_CONFIG, 'utf8'));
   } catch {
     return [];
   }
+}
+
+/**
+ * Add a client API key through the gateway's management API (GET then PUT access.api-keys). The
+ * gateway saves its config itself and takes the key at once, whatever layout the file is in;
+ * editing config.yaml by hand broke when the gateway had rewritten the list on one line.
+ */
+async function addGatewayKey(key) {
+  const mgmt = `Bearer ${MGMT_KEY}`;
+  const got = await local('GET', '/v0/management/api-keys', mgmt);
+  if (got.status !== 200) throw new Error(`gateway api-keys read failed (${got.status})`);
+  const keys = JSON.parse(got.text)['api-keys'];
+  if (!Array.isArray(keys) || !keys.length) throw new Error('gateway api-keys read returned no list; not overwriting');
+  if (keys.includes(key)) return;
+  const put = await local('PUT', '/v0/management/api-keys', mgmt, [...keys, key]);
+  if (put.status !== 200) throw new Error(`gateway api-keys save failed (${put.status})`);
 }
 
 /** Who a key belongs to: an explicit label, the person it was created for, or nobody known. */

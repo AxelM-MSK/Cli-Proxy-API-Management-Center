@@ -21,9 +21,11 @@ Secrets live in Key Vault `SDN-SharedVault`: `ai-gateway-management-key`,
 Accounts (OAuth files) live only in `/opt/cliproxy/auths`. Cursor CLI login is the
 `cliproxy` user's (`~/.config/cursor/auth.json`).
 
-Add a user: append a key to `access.api-keys` in `/opt/cliproxy/config.yaml` (hot-reloaded)
+Add a user: add a key to `access.api-keys` with `PUT /v0/management/api-keys` (full list; read it first with GET)
 and store it as `ai-gateway-key-<name>` in Key Vault. Console access additionally needs
 their email in the Access app policy (`cloudflare.mjs`, `ALLOW`).
+
+Member portal: key `ai-gateway-key-member-portal` (label "member-portal (AI usage page)") reads `/v1/_msk/quota` for the SDN AI usage page (2026-10-07).
 
 ## Keyless access for msk (Entra sign-in) and per-person usage
 
@@ -32,7 +34,7 @@ Added 2026-10-02. Configured by the `entra` block in `/opt/cliproxy/access-gate/
 - **Signing in with a Microsoft token on `/v1`:**
   - API clients may send a Microsoft Entra access token instead of an API key, either as `Authorization: Bearer` or as `x-api-key`. The token is for app "MSK Agent Kit" (`ae407aea-...`), scope `gateway.use`.
   - The gate verifies the signature against the tenant keys, the issuer, the tenant, the audience, the scope and the expiry, then checks `entra.allowedUsers` (a list of UPNs, or `"*"`).
-  - It then swaps in that person's own gateway key. The key is created on first use as `sk-msk-u-<name>-...`, appended to `access.api-keys` (CLIProxyAPI hot-reloads), and recorded in `user-keys.json`.
+  - It then swaps in that person's own gateway key. The key is created on first use as `sk-msk-u-<name>-...`, added to `access.api-keys` through the management API (`GET`/`PUT /v0/management/api-keys`; the gateway saves its own config and takes the key at once), and recorded in `user-keys.json`. Do not edit the key list in `config.yaml` by hand: the gateway rewrites it as a one-line list, and a file replaced by rename is not hot-reloaded. Add keys with that same management call.
   - Nobody holds a key, and disabling the Entra account ends access.
 - **Usage:** every `/v1` request is logged to `/opt/cliproxy/access-gate/usage/YYYY-MM-DD.jsonl`.
   - Each line records the person (Entra users by UPN; key clients by `keyLabels` or a key prefix), the model, the status, and input, cached, cache-write and output tokens, read from the response stream.
