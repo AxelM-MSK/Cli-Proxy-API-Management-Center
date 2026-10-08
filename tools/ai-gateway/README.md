@@ -29,6 +29,8 @@ Member portal: key `ai-gateway-key-member-portal` (label "member-portal (AI usag
 
 Quota (`/v1/_msk/quota`): Claude accounts are asked at most every 5 minutes, Codex every minute; a 429 backs that account off for 15 minutes. The last good figures per account are kept in `/opt/cliproxy/access-gate/quota-last.json` (survives restarts) and returned with `stale: true` and `usageAt` while the provider refuses.
 
+Agent usage (`/v1/_msk/agent-usage?agent=sdn`, any valid gateway key): totals for agents that run outside the gateway. The agent appends one line per run (ts, provider, model, ok, ms, in, out, cacheRead, cacheWrite; never content) to `/var/lib/msk-agent-usage/<agent>.jsonl` (owner azureuser, group cliproxy, 2750) and may save `<agent>-plan.json` (its subscription usage). Allowed agents: config `agentUsageAgents` (default sdn).
+
 ## Keyless access for msk (Entra sign-in) and per-person usage
 
 Added 2026-10-02. Configured by the `entra` block in `/opt/cliproxy/access-gate/config.json`.

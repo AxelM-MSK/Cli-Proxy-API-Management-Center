@@ -458,8 +458,58 @@ async function quota(req, res) {
   res.end(JSON.stringify(quotaCache.body));
 }
 
+// GET /v1/_msk/agent-usage?agent=sdn: what one agent used, for agents that run outside the gateway
+// (e.g. the SDN Agent on Dr. Yoo's Cursor plan, which needs its own shell tools). The agent appends
+// one line per run to <dir>/<agent>.jsonl ({ts, provider, model, ok, ms, in, out, cacheRead,
+// cacheWrite}; never content) and may write <agent>-plan.json (its subscription's overall usage).
+const AGENT_USAGE_DIR = CONFIG.agentUsageDir ?? '/var/lib/msk-agent-usage';
+const AGENT_IDS = new Set(CONFIG.agentUsageAgents ?? ['sdn']);
+
+export function summarizeAgentUsage(lines, now = Date.now()) {
+  const DAY = 86_400_000;
+  const blank = () => ({ runs: 0, failed: 0, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, ms: 0 });
+  const add = (t, r) => {
+    t.runs += 1; if (!r.ok) t.failed += 1;
+    for (const k of ['in', 'out', 'cacheRead', 'cacheWrite', 'ms']) t[k] += Number.isFinite(r[k]) ? r[k] : 0;
+  };
+  const totals = { d7: blank(), d30: blank() };
+  const days = {}; const models = {};
+  for (const line of lines) {
+    let r; try { r = JSON.parse(line); } catch { continue; }
+    const t = Date.parse(r?.ts);
+    if (!Number.isFinite(t) || t > now + DAY || now - t > 30 * DAY) continue;
+    add(totals.d30, r);
+    if (now - t <= 7 * DAY) add(totals.d7, r);
+    const day = new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+    add((days[day] ??= blank()), r);
+    add((models[`${r.provider ?? 'unknown'}|${r.model ?? 'unknown'}`] ??= blank()), r);
+  }
+  return {
+    totals,
+    days: Object.entries(days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([day, v]) => ({ day, ...v })),
+    models: Object.entries(models).map(([k, v]) => ({ provider: k.split('|')[0], model: k.split('|').slice(1).join('|'), ...v })).sort((a, b) => b.runs - a.runs),
+  };
+}
+
+async function agentUsage(req, res) {
+  const auth = req.headers.authorization ?? '';
+  if (!/^Bearer \S{8,}$/.test(auth) || (await local('GET', '/v1/models', auth).catch(() => ({ status: 0 }))).status !== 200) {
+    return deny(res, 401, 'valid gateway API key required');
+  }
+  const agent = new URL(req.url, 'http://x').searchParams.get('agent') ?? '';
+  if (!AGENT_IDS.has(agent)) return deny(res, 404, 'unknown agent');
+  let lines = [];
+  try { lines = readFileSync(`${AGENT_USAGE_DIR}/${agent}.jsonl`, 'utf8').split('\n').filter(Boolean); } catch {}
+  let plan = null;
+  try { plan = JSON.parse(readFileSync(`${AGENT_USAGE_DIR}/${agent}-plan.json`, 'utf8')); } catch {}
+  const body = { agent, observedAt: new Date().toISOString(), firstRecordAt: (() => { try { return JSON.parse(lines[0]).ts; } catch { return null; } })(), ...summarizeAgentUsage(lines), plan };
+  res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(body));
+}
+
 function route(path) {
   if (path === '/v1/_msk/quota') return { local: 'quota', open: true };
+  if (path === '/v1/_msk/agent-usage') return { local: 'agent-usage', open: true };
   if (path === '/v1/_msk/usage') return { local: 'usage', open: true };
   if (path === '/v1' || path.startsWith('/v1/')) return { port: UPSTREAM.gateway, open: true };
   if (path === '/_bridge/auth/whoami') return { local: 'whoami' };
@@ -500,6 +550,10 @@ const server = createServer(async (req, res) => {
   if (target.local === 'quota') {
     if (req.method !== 'GET') return deny(res, 405, 'GET only');
     return quota(req, res).catch(() => deny(res, 502, 'quota unavailable'));
+  }
+  if (target.local === 'agent-usage') {
+    if (req.method !== 'GET') return deny(res, 405, 'GET only');
+    return agentUsage(req, res).catch(() => deny(res, 502, 'agent usage unavailable'));
   }
   if (target.local === 'console-usage') {
     if (req.method !== 'GET') return deny(res, 405, 'GET only');
