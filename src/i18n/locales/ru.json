@@ -631,6 +631,7 @@
     "usage_unavailable": "Данные об использовании недоступны от xAI",
     "reset_at": "Сброс {{time}}",
     "product_usage": "Использование {{product}}",
+    "usage_breakdown": "Распределение использования (общая квота)",
     "plan_label": "План",
     "resets_label": "Сброс",
     "prepaid": "Предоплата",
@@ -1832,7 +1833,8 @@
     "chinese_tw": "繁體中文（台灣）",
     "english": "English",
     "russian": "Русский",
-    "vietnamese": "Tiếng Việt"
+    "vietnamese": "Tiếng Việt",
+    "korean": "한국어"
   },
   "theme": {
     "switch": "Тема",
