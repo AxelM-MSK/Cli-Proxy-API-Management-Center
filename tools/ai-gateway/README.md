@@ -48,3 +48,34 @@ Added 2026-10-02. Configured by the `entra` block in `/opt/cliproxy/access-gate/
   - The key table lists every key in `access.api-keys`, including unused ones, and flags keys that have traffic but are no longer configured. Lines logged before keys were recorded are attributed via `keyLabels` and `user-keys.json`.
 - **Adding a person:** add their UPN to `entra.allowedUsers` and restart `access-gate`. Their key is created automatically the first time they use msk in clean mode.
 - **API keys are unchanged:** existing keys, the bots and Cursor keep working as before.
+
+## App accounts: each person held to their app's model account
+
+Configured by the `appAccounts` block in `/opt/cliproxy/access-gate/config.json` (logic in `app-accounts.mjs`). Without the block the feature is off, so deploying the code alone changes nothing.
+
+```json
+"appAccounts": {
+  "mode": "shadow",
+  "appHeader": "x-msk-app",
+  "rewriteModels": ["claude-*"],
+  "apps": {
+    "sdn": { "role": "msk.app.sdn", "prefixes": ["yoo"] },
+    "mso": { "role": "msk.app.mso", "prefixes": ["mso"], "passthrough": ["gpt-*", "codex-*"], "websocket": true }
+  }
+}
+```
+
+- **Which app:** for a `/v1` request signed in with an Entra token, the gate reads the token's `roles` claim. The app is the one named in the `appHeader` header, if the caller holds that app's role; otherwise the one app whose role they hold. A caller with several app roles and no header, or with none, is refused.
+- **Which account:** a plain model id matching `rewriteModels` (per app or global; default `claude-*`) is pinned to the app's first prefix (`claude-…` becomes `yoo/claude-…` for sdn). A `<prefix>/<model>` id for the app's own prefix is allowed; a prefix that belongs to another app is refused. Models in `passthrough` keep the gateway's own routing (GPT models on the Codex account). Anything else is refused.
+- **WebSockets** (the Responses API websocket) carry the model inside the session, where the gate cannot see it. An app may open them only with `"websocket": true`.
+- **Modes:**
+  - `off`: no checks, no extra log fields.
+  - `shadow` (default when the block exists): nothing about the request changes. Each usage line gains `app`, `appMode`, `appDecision` (`allow`, `would-rewrite`, `would-refuse`), `appAccount` (the prefix, or `routed`), `appModel` (the model id enforce would send) and `appReason` for refusals.
+  - `enforce`: the gate reads the whole body (up to 64 MB; compressed bodies are refused), rewrites `model`, and answers refusals with `403 {"error": "..."}`. Refusals are logged with status 403 and `appDecision: "refuse"`.
+- **Shared API keys are unchanged in every mode:** callers that send a gateway API key instead of an Entra token (the named personal keys, bots, Cursor, the member portal) are never checked or rewritten, and are logged with `app: "legacy"`.
+
+Shadow → enforce:
+
+1. Deploy `access-gate.mjs` and `app-accounts.mjs` side by side, back up the live `config.json`, add the block with `"mode": "shadow"`, and restart `access-gate`. The journal line `access-gate listening … (app accounts: shadow)` confirms it.
+2. Let it run, then count decisions per person and app (no message text is logged), e.g. `jq -r '[.user, .app, .appDecision] | @tsv' usage/*.jsonl | sort | uniq -c`. Expect no `would-refuse` for real users; fix role assignments or clients that do not send the header first.
+3. Set `"mode": "enforce"` and restart. To back out, set `"shadow"` (or remove the block) and restart.
