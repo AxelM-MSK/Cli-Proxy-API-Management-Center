@@ -21,7 +21,7 @@
 // Defense in depth: Cloudflare Access already blocks unsigned requests at the
 // edge; the gate re-checks so a misconfigured Access app cannot expose the console.
 
-import { createPublicKey, randomBytes, verify } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, verify } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
@@ -431,6 +431,13 @@ function local(method, path, auth, body) {
 
 const maskEmail = (e) => (typeof e === 'string' && e.includes('@') ? `${e.slice(0, 2)}***@${e.split('@')[1]}` : undefined);
 
+// Stable, non-secret account identity for clients that filter personal subscriptions.
+// A masked email is not an identity: different subscribers may share that display label.
+function quotaAccountId(provider, email) {
+  if (!['claude', 'codex'].includes(provider) || typeof email !== 'string' || !email.includes('@')) return undefined;
+  return createHash('sha256').update(`${provider}\0${email.trim().toLowerCase()}`).digest('hex');
+}
+
 // Last good figures per account, kept on disk so a restart does not blank the page or make every
 // account ask its provider again at once. { "<type>:<auth_index>": { usage, at, nextAt } }
 const QUOTA_STATE_FILE = CONFIG.quotaStateFile ?? '/opt/cliproxy/access-gate/quota-last.json';
@@ -446,7 +453,7 @@ const RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 async function accountQuota(f, src, mgmt, now) {
   const id = `${f.type}:${f.auth_index}`;
   const last = quotaState[id];
-  const entry = { provider: f.type, account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
+  const entry = { provider: f.type, accountId: quotaAccountId(f.type, f.email), account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
   const useLast = (error) => {
     if (last?.usage) Object.assign(entry, { usage: last.usage, usageAt: last.at, stale: Boolean(error) || undefined });
     else if (error) entry.error = error;
