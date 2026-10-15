@@ -9,7 +9,8 @@
 //   /v1/_msk/quota                -> answered here (gateway API key or Entra token; Ledger quota)
 //   /v1/_msk/usage                -> answered here (Entra token of a gateway admin; usage per person and key)
 //   /_bridge/usage                -> answered here (signed-in console users; usage per person and key)
-//   /v1/* with an Entra token     -> token verified, swapped for that person's own key (CONFIG.entra)
+//   /v1/* with an Entra token     -> token verified, swapped for that person's own key (CONFIG.entra);
+//                                    held to their app's model account (CONFIG.appAccounts)
 //   /v1/*                         -> 8317 untouched (per-user API keys; Access bypassed)
 //   /_bridge/auth/whoami          -> answered here (signed-in email, for auto-login)
 //   /_bridge/cursor/*             -> 8319 (signed-in only; bridge key auth as before)
@@ -20,10 +21,11 @@
 // Defense in depth: Cloudflare Access already blocks unsigned requests at the
 // edge; the gate re-checks so a misconfigured Access app cannot expose the console.
 
-import { createPublicKey, randomBytes, verify } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, verify } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import { connect } from 'node:net';
+import { loadAppAccounts, planRequest } from './app-accounts.mjs';
 
 const CONFIG = JSON.parse(readFileSync(process.env.GATE_CONFIG ?? '/opt/cliproxy/access-gate/config.json', 'utf8'));
 const HOST = '127.0.0.1';
@@ -32,7 +34,7 @@ const TEAM = CONFIG.teamDomain; // e.g. https://msk-mso.cloudflareaccess.com
 const AUD = CONFIG.aud;
 const ALLOWED = new Set((CONFIG.allowedEmails ?? []).map((e) => e.toLowerCase()));
 const MGMT_KEY = readFileSync(CONFIG.managementKeyFile, 'utf8').trim();
-const UPSTREAM = { gateway: 8317, cursor: 8319, foundry: 8320 };
+const UPSTREAM = { gateway: 8317, cursor: 8319, foundry: 8320, ...(CONFIG.upstreamPorts ?? {}) };
 
 if (!TEAM || !AUD || ALLOWED.size === 0 || !MGMT_KEY) throw new Error('access-gate config incomplete');
 
@@ -82,11 +84,14 @@ async function accessUser(req) {
 // and swaps in that person's own gateway API key, created on first use and named after them, so
 // usage is tracked per person while nobody holds a key. Off unless CONFIG.entra is set.
 const ENTRA = CONFIG.entra ?? null; // { tenantId, audience, scope, allowedUsers: ["*"|upn...], userKeysFile, gatewayConfig }
+// Which model account each app may reach (app-accounts.mjs). No block = off.
+const APP_ACCOUNTS = loadAppAccounts(CONFIG.appAccounts);
 let entraJwks = { at: 0, keys: new Map() };
 
 async function entraSigningKey(kid) {
   if (!entraJwks.keys.has(kid) || Date.now() - entraJwks.at > 60 * 60 * 1000) {
-    const res = await fetch(`https://login.microsoftonline.com/${ENTRA.tenantId}/discovery/v2.0/keys`, { signal: AbortSignal.timeout(10_000) });
+    const url = ENTRA.jwksUri ?? `https://login.microsoftonline.com/${ENTRA.tenantId}/discovery/v2.0/keys`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     const body = await res.json();
     entraJwks = { at: Date.now(), keys: new Map((body.keys ?? []).map((k) => [k.kid, createPublicKey({ key: k, format: 'jwk' })])) };
   }
@@ -95,7 +100,7 @@ async function entraSigningKey(kid) {
 
 const looksLikeJwt = (auth) => /^Bearer eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(auth ?? '');
 
-/** Returns { oid, upn, name } for a valid, allowed Entra token, or null. */
+/** Returns { oid, upn, name, roles } for a valid, allowed Entra token, or null. */
 async function entraUser(auth) {
   if (!ENTRA || !looksLikeJwt(auth)) return null;
   const parts = auth.slice(7).split('.');
@@ -112,7 +117,7 @@ async function entraUser(auth) {
     const upn = String(c.preferred_username ?? c.upn ?? '').toLowerCase();
     const allowed = ENTRA.allowedUsers ?? [];
     if (!c.oid || !upn || !(allowed.includes('*') || allowed.map((u) => u.toLowerCase()).includes(upn))) return null;
-    return { oid: c.oid, upn, name: c.name ?? upn };
+    return { oid: c.oid, upn, name: c.name ?? upn, roles: Array.isArray(c.roles) ? c.roles.map(String) : [] };
   } catch {
     return null;
   }
@@ -157,6 +162,7 @@ async function applyEntra(req) {
   if (fromXKey) req.headers['x-api-key'] = key;
   else req.headers.authorization = `Bearer ${key}`;
   req.mskUser = user.upn;
+  req.mskRoles = user.roles;
   return true;
 }
 
@@ -253,6 +259,15 @@ function tapRequest(req) {
   req.on('data', (d) => { if (req.mskHead.length < 65536) req.mskHead += d.toString('utf8', 0, Math.min(d.length, 65536)); });
 }
 
+function writeUsage(rec) {
+  try {
+    mkdirSync(USAGE_DIR, { recursive: true });
+    appendFileSync(`${USAGE_DIR}/${rec.ts.slice(0, 10)}.jsonl`, `${JSON.stringify(rec)}\n`);
+  } catch (e) {
+    console.error(`usage log failed: ${e.message}`);
+  }
+}
+
 function trackUsage(req, up, path) {
   const started = req.mskStarted ?? Date.now();
   const reqHead = () => req.mskHead ?? '';
@@ -271,13 +286,43 @@ function trackUsage(req, up, path) {
       cachedInputTokens: lastInt(tail, ['cache_read_input_tokens', 'cached_tokens']) ?? null,
       cacheWriteTokens: lastInt(tail, ['cache_creation_input_tokens', 'cache_write_tokens']) ?? null,
       ms: Date.now() - started,
+      ...appLog(req),
     };
-    try {
-      mkdirSync(USAGE_DIR, { recursive: true });
-      appendFileSync(`${USAGE_DIR}/${rec.ts.slice(0, 10)}.jsonl`, `${JSON.stringify(rec)}\n`);
-    } catch (e) {
-      console.error(`usage log failed: ${e.message}`);
-    }
+    writeUsage(rec);
+  });
+}
+
+/* ------------------------------------------------- app accounts (CONFIG.appAccounts) */
+
+const appPlan = (req, bodyText, websocket = false) =>
+  planRequest(APP_ACCOUNTS, {
+    entra: Boolean(req.mskUser),
+    roles: req.mskRoles ?? [],
+    headerValue: req.headers[APP_ACCOUNTS.header],
+    bodyText,
+    websocket,
+  });
+
+/** The app-account fields for the usage record: the plan made in enforce mode, else (shadow) now. */
+function appLog(req) {
+  if (req.mskAppLog) return req.mskAppLog;
+  return appPlan(req, req.mskHead ?? '').log;
+}
+
+const MAX_ENFORCE_BODY = 64 * 1024 * 1024;
+
+/** Enforce mode, Entra caller: read the whole body so the model can be checked and rewritten. */
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (d) => {
+      size += d.length;
+      if (size > MAX_ENFORCE_BODY) return req.destroy(new Error('body too large'));
+      chunks.push(d);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
   });
 }
 
@@ -386,6 +431,13 @@ function local(method, path, auth, body) {
 
 const maskEmail = (e) => (typeof e === 'string' && e.includes('@') ? `${e.slice(0, 2)}***@${e.split('@')[1]}` : undefined);
 
+// Stable, non-secret account identity for clients that filter personal subscriptions.
+// A masked email is not an identity: different subscribers may share that display label.
+function quotaAccountId(provider, email) {
+  if (!['claude', 'codex'].includes(provider) || typeof email !== 'string' || !email.includes('@')) return undefined;
+  return createHash('sha256').update(`${provider}\0${email.trim().toLowerCase()}`).digest('hex');
+}
+
 // Last good figures per account, kept on disk so a restart does not blank the page or make every
 // account ask its provider again at once. { "<type>:<auth_index>": { usage, at, nextAt } }
 const QUOTA_STATE_FILE = CONFIG.quotaStateFile ?? '/opt/cliproxy/access-gate/quota-last.json';
@@ -401,7 +453,7 @@ const RATE_LIMIT_BACKOFF_MS = 15 * 60_000;
 async function accountQuota(f, src, mgmt, now) {
   const id = `${f.type}:${f.auth_index}`;
   const last = quotaState[id];
-  const entry = { provider: f.type, account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
+  const entry = { provider: f.type, accountId: quotaAccountId(f.type, f.email), account: maskEmail(f.email) ?? f.label ?? f.auth_index, status: f.status };
   const useLast = (error) => {
     if (last?.usage) Object.assign(entry, { usage: last.usage, usageAt: last.at, stale: Boolean(error) || undefined });
     else if (error) entry.error = error;
@@ -563,17 +615,44 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify({ gateway: true, email: user }));
   }
-  if (target.open && path.startsWith('/v1/')) tapRequest(req);
+  const v1 = target.open && path.startsWith('/v1/');
+  // Enforce mode holds Entra callers to their app's account: read the body, then rewrite or refuse.
+  let body = null;
+  if (v1 && req.mskUser && APP_ACCOUNTS.mode === 'enforce') {
+    req.mskStarted = Date.now();
+    // A compressed body would hide the model from the check.
+    if (!/^(identity)?$/i.test(String(req.headers['content-encoding'] ?? '').trim())) {
+      return deny(res, 415, 'compressed request bodies are not accepted while app accounts are enforced');
+    }
+    let raw;
+    try { raw = await readBody(req); } catch { return deny(res, 413, 'request body unreadable or too large'); }
+    const plan = appPlan(req, raw);
+    req.mskAppLog = plan.log;
+    req.mskHead = raw.toString('utf8', 0, Math.min(raw.length, 65536));
+    if (plan.action === 'refuse') {
+      writeUsage({ ts: new Date().toISOString(), user: callerLabel(req), key: maskKey(requestKey(req)), path, model: plan.log.appModel ?? null, status: 403, ms: 0, ...plan.log });
+      return deny(res, 403, plan.message);
+    }
+    body = plan.action === 'rewrite' ? plan.body : raw;
+  } else if (v1) {
+    tapRequest(req);
+  }
+  const headers = forwardHeaders(req, target.inject);
+  if (body) {
+    delete headers['transfer-encoding'];
+    headers['content-length'] = String(body.length);
+  }
   const upstream = httpRequest(
-    { host: HOST, port: target.port, method: req.method, path: req.url, headers: forwardHeaders(req, target.inject) },
+    { host: HOST, port: target.port, method: req.method, path: req.url, headers },
     (up) => {
-      if (target.open && path.startsWith('/v1/')) trackUsage(req, up, path);
+      if (v1) trackUsage(req, up, path);
       res.writeHead(up.statusCode ?? 502, up.headers);
       up.pipe(res);
     }
   );
   upstream.on('error', () => (res.headersSent ? res.destroy() : deny(res, 502, 'upstream unavailable')));
-  req.pipe(upstream);
+  if (body) upstream.end(body);
+  else req.pipe(upstream);
 });
 
 // WebSocket upgrades (e.g. the Responses API websocket) pass straight through.
@@ -582,6 +661,13 @@ server.on('upgrade', async (req, socket, head) => {
   const target = route(path);
   if (!target.port || (!target.open && !(await accessUser(req)))) return socket.destroy();
   if (target.open && !(await applyEntra(req).catch(() => false))) return socket.destroy();
+  // A websocket's model is chosen inside the session, out of the gate's sight: enforce mode lets an
+  // Entra caller open one only if their app allows it. Shadow mode just logs.
+  if (target.open && path.startsWith('/v1') && req.mskUser && APP_ACCOUNTS.mode !== 'off') {
+    const plan = appPlan(req, '', true);
+    writeUsage({ ts: new Date().toISOString(), user: callerLabel(req), key: maskKey(requestKey(req)), path, model: null, status: plan.action === 'refuse' ? 403 : 101, websocket: true, ...plan.log });
+    if (plan.action === 'refuse') return socket.end('HTTP/1.1 403 Forbidden\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n' + JSON.stringify({ error: plan.message }));
+  }
   const upstream = connect(target.port, HOST, () => {
     const headers = forwardHeaders(req, target.inject);
     const lines = [`${req.method} ${req.url} HTTP/1.1`, ...Object.entries(headers).map(([k, v]) => `${k}: ${v}`)];
@@ -595,4 +681,4 @@ server.on('upgrade', async (req, socket, head) => {
 });
 
 server.requestTimeout = 0; // long streams are fine; upstreams enforce their own limits
-server.listen(PORT, HOST, () => console.log(`access-gate listening on http://${HOST}:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`access-gate listening on http://${HOST}:${PORT} (app accounts: ${APP_ACCOUNTS.mode})`));
