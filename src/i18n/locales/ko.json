@@ -107,7 +107,8 @@
     "plugin_store": "플러그인 스토어",
     "config_management": "설정 패널",
     "logs": "로그 뷰어",
-    "system_info": "관리 센터 정보"
+    "system_info": "관리 센터 정보",
+    "gateway_usage": "게이트웨이 사용량"
   },
   "nav_groups": {
     "operate": "운영",
@@ -127,7 +128,8 @@
     "plugin_store": "플러그인 탐색 및 설치",
     "logs": "요청 추적",
     "config_management": "게이트웨이 설정",
-    "system_info": "런타임 및 진단"
+    "system_info": "런타임 및 진단",
+    "gateway_usage": "사용자 및 키별 사용량"
   },
   "dashboard": {
     "hero_verdict_good": "모든 시스템 정상",
@@ -1622,7 +1624,32 @@
     "weekday_wed": "수",
     "weekday_thu": "목",
     "weekday_fri": "금",
-    "weekday_sat": "토"
+    "weekday_sat": "토",
+    "view_label": "보기",
+    "view_ledger": "원장",
+    "view_cards": "카드",
+    "show_emails": "이메일 표시",
+    "hide_emails": "이메일 숨기기",
+    "ledger_summary_label": "공급자별 합계",
+    "ledger_of_capacity": "전체 {{capacity}}% 중",
+    "ledger_credentials": "인증 정보 {{count}}개",
+    "ledger_not_loaded": "아직 로드되지 않음",
+    "ledger_no_reset": "예정된 초기화 없음",
+    "ledger_renews": "{{date}} 갱신",
+    "ledger_manual_resets": "수동 초기화",
+    "ledger_resets_available": "{{count}}회 사용 가능",
+    "ledger_reset_index": "초기화 {{index}}",
+    "ledger_select_provider": "{{provider}}만 표시",
+    "cursor_spend": "{{spent}} 사용 · {{included}} 포함",
+    "foundry_deployments": "배포 {{count}}개",
+    "foundry_month_cost": "이번 달 비용",
+    "foundry_stale": "마지막 확인 값",
+    "foundry_month_tokens": "이번 달 토큰 {{tokens}}개 · 요청 {{requests}}건",
+    "foundry_requests": "요청 {{count}}건",
+    "foundry_input": "입력 토큰",
+    "foundry_output": "출력 토큰",
+    "foundry_last24h": "지난 24시간",
+    "foundry_idle": "이번 달 Foundry 사용량이 아직 없습니다"
   },
   "plugin_management": {
     "title": "플러그인 관리",
@@ -2269,5 +2296,39 @@
     "unavailable": "현재 초기화를 사용할 수 없습니다.",
     "rate_limited": "요청 속도가 제한되었습니다.",
     "auth_error": "인증이 거부되었습니다."
+  },
+  "gateway_usage": {
+    "title": "게이트웨이 사용량",
+    "subtitle": "AI 게이트웨이(/v1)의 사용자 및 API 키별 요청과 토큰입니다. 키는 마스킹됩니다.",
+    "days_label": "기간",
+    "days_option_one": "최근 {{count}}일",
+    "days_option_other": "최근 {{count}}일",
+    "refresh": "새로고침",
+    "by_user": "사용자별",
+    "by_key": "API 키별",
+    "people": "사용자",
+    "active_keys": "사용된 키",
+    "col_user": "사용자",
+    "col_keys": "키",
+    "col_key": "키",
+    "col_owner": "소유자",
+    "col_requests": "요청",
+    "col_input": "입력",
+    "col_cached": "캐시됨",
+    "col_cache_write": "캐시 쓰기",
+    "col_output": "출력",
+    "col_total": "총 토큰",
+    "col_models": "모델",
+    "col_last_used": "마지막 사용",
+    "errors_one": "({{count}}건 실패)",
+    "errors_other": "({{count}}건 실패)",
+    "never": "이 기간에 사용되지 않음",
+    "owner_unknown": "알 수 없음",
+    "key_removed": "삭제됨",
+    "empty": "이 기간에 요청이 없습니다",
+    "absent_title": "여기서는 사용량을 확인할 수 없습니다",
+    "absent_desc": "사용자 및 키별 사용량은 원격 게이트웨이(https)의 접근 제어 게이트에서 제공됩니다. 이 연결에는 해당 기능이 없습니다.",
+    "load_failed": "사용량을 불러올 수 없습니다: {{error}}",
+    "generated_at": "{{time}} 생성"
   }
 }
