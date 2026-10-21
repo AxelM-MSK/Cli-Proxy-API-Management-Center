@@ -435,7 +435,9 @@
     "quota_refresh_single": "Refresh quota",
     "quota_refresh_hint": "Refresh quota only for this credential",
     "quota_refresh_success": "Quota refreshed for \"{{name}}\"",
-    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}"
+    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}",
+    "use_siwc_label": "Use SIWC (use_siwc)",
+    "use_siwc_hint": "Use the bound SIWC credential when enabled. Turning this off only disables SIWC and preserves binding data. Complete binding before enabling."
   },
   "antigravity_subscription": {
     "plan_unknown": "Unknown",
@@ -2295,7 +2297,12 @@
     "ineligible": "This account is not eligible.",
     "unavailable": "Resets are currently unavailable.",
     "rate_limited": "Request rate limited.",
-    "auth_error": "Authorization was refused."
+    "auth_error": "Authorization was refused.",
+    "failure_organization": "Reset not submitted: organization lookup failed ({{code}}).",
+    "failure_status": "Reset not submitted: fresh reset eligibility lookup failed ({{code}}).",
+    "failure_eligibility": "Reset not submitted: eligibility, validity dates, or cooldown check failed. Check your device clock ({{code}}).",
+    "failure_request_id": "Reset not submitted: could not generate a secure request ID. Use HTTPS or localhost and a supported browser ({{code}}).",
+    "failure_operation": "Reset not submitted: concurrent operation, session, identity, or retry-window check failed ({{code}})."
   },
   "gateway_usage": {
     "title": "Gateway usage",
@@ -2330,5 +2337,39 @@
     "absent_desc": "Per-person and per-key usage comes from the access gate on the remote gateway (https). This connection does not have it.",
     "load_failed": "Could not load usage: {{error}}",
     "generated_at": "Generated {{time}}"
+  },
+  "siwc": {
+    "title": "Bind SIWC",
+    "bind": "Bind SIWC",
+    "tile_caption": "Bind SIWC to a Codex credential",
+    "intro": "Choose a Codex credential. After you authorize in the browser, SIWC will be bound to it.",
+    "target": "Credential",
+    "active": "Active",
+    "bound": "Bound · inactive",
+    "unbound": "Not bound",
+    "expires": "Expires {{date}}",
+    "loading": "Loading credentials…",
+    "no_targets": "No Codex credentials can be bound to SIWC yet.",
+    "load_failed": "Could not load credentials. Close and try again.",
+    "start": "Start authorization",
+    "starting": "Generating authorization link…",
+    "wait": "Waiting for authorization…",
+    "cancel": "Cancel binding",
+    "retry": "Start over",
+    "step_open": "Open the authorization page and sign in",
+    "open": "Open authorization page",
+    "copy": "Copy link",
+    "callback": "Paste the callback URL",
+    "hint": "After authorizing, the browser redirects to http://127.0.0.1:1455/auth/callback. Even if the page fails to load, copy the full URL from the address bar and paste it here.",
+    "submit": "Submit",
+    "submitted": "Callback submitted. Waiting for confirmation…",
+    "invalid_callback": "Incomplete URL: it needs the matching state plus code and client_id (or an OAuth error).",
+    "callback_failed": "Callback submission failed. Check the URL and try again.",
+    "ok": "SIWC bound",
+    "ok_hint": "SIWC is now bound to {{name}}.",
+    "done": "Done",
+    "error": "Binding failed. Please start over.",
+    "unsupported": "This backend does not support SIWC binding.",
+    "expired": "The binding session expired. Please start over."
   }
 }
