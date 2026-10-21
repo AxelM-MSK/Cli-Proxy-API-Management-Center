@@ -433,7 +433,9 @@
     "quota_refresh_single": "刷新额度",
     "quota_refresh_hint": "仅刷新该认证文件的额度",
     "quota_refresh_success": "已刷新 \"{{name}}\" 的额度",
-    "quota_refresh_failed": "刷新 \"{{name}}\" 的额度失败：{{message}}"
+    "quota_refresh_failed": "刷新 \"{{name}}\" 的额度失败：{{message}}",
+    "use_siwc_label": "使用 SIWC（use_siwc）",
+    "use_siwc_hint": "启用后使用已绑定的 SIWC 凭证。关闭仅停用 SIWC，不会删除绑定数据；启用前请先完成绑定。"
   },
   "antigravity_subscription": {
     "plan_unknown": "未知",
@@ -549,7 +551,6 @@
     "reset_confirm_button": "确认重置",
     "reset_not_confirmed": "未确认额度重置成功，请刷新额度后再决定是否重试。",
     "reset_cooldown_failed": "额度已重置，但代理冷却清除失败。请在原连接的认证文件页面使用“清除冷却”，不要再次消耗重置卡。",
-
     "reset_success": "已重置 \"{{name}}\" 的 Codex 额度",
     "reset_failed": "重置 \"{{name}}\" 的 Codex 额度失败：{{message}}",
     "plan_plus": "Plus",
@@ -2294,7 +2295,12 @@
     "ineligible": "此账户不符合资格。",
     "unavailable": "重置暂不可用。",
     "rate_limited": "请求过于频繁。",
-    "auth_error": "授权被拒绝。"
+    "auth_error": "授权被拒绝。",
+    "failure_organization": "未提交重置：查询或解析组织信息失败（{{code}}）。",
+    "failure_status": "未提交重置：查询或解析最新重置资格失败（{{code}}）。",
+    "failure_eligibility": "未提交重置：资格、有效期或冷却检查未通过，请同时检查设备时间（{{code}}）。",
+    "failure_request_id": "未提交重置：无法生成安全请求 ID，请使用 HTTPS 或 localhost 及受支持的浏览器（{{code}}）。",
+    "failure_operation": "未提交重置：并发操作、会话、账户身份或重试期限检查未通过（{{code}}）。"
   },
   "gateway_usage": {
     "title": "网关用量",
@@ -2329,5 +2335,39 @@
     "absent_desc": "按人员和密钥的用量来自远程网关 (https) 的访问网关，当前连接不提供。",
     "load_failed": "无法加载用量：{{error}}",
     "generated_at": "生成于 {{time}}"
+  },
+  "siwc": {
+    "title": "绑定 SIWC",
+    "bind": "绑定 SIWC",
+    "tile_caption": "为 Codex 凭证绑定 SIWC",
+    "intro": "选择一个 Codex 凭证。完成浏览器授权后，SIWC 会绑定到该凭证。",
+    "target": "凭证",
+    "active": "已启用",
+    "bound": "已绑定 · 未启用",
+    "unbound": "未绑定",
+    "expires": "到期 {{date}}",
+    "loading": "正在加载凭证…",
+    "no_targets": "暂无可绑定 SIWC 的 Codex 凭证。",
+    "load_failed": "凭证列表加载失败，请关闭后重试。",
+    "start": "开始授权",
+    "starting": "正在生成授权链接…",
+    "wait": "等待授权…",
+    "cancel": "取消绑定",
+    "retry": "重新开始",
+    "step_open": "打开授权页并完成登录",
+    "open": "打开授权页",
+    "copy": "复制链接",
+    "callback": "粘贴回调链接",
+    "hint": "授权后浏览器会跳转到 http://127.0.0.1:1455/auth/callback，即使页面无法打开，也请复制地址栏中的完整链接粘贴到这里。",
+    "submit": "提交",
+    "submitted": "回调已提交，等待确认…",
+    "invalid_callback": "链接不完整：需包含匹配的 state，以及 code 与 client_id（或 OAuth 错误）。",
+    "callback_failed": "回调提交失败，请检查链接后重试。",
+    "ok": "SIWC 绑定完成",
+    "ok_hint": "{{name}} 已绑定 SIWC。",
+    "done": "完成",
+    "error": "绑定失败，请重新开始。",
+    "unsupported": "当前后端不支持 SIWC 绑定。",
+    "expired": "绑定会话已过期，请重新开始。"
   }
 }

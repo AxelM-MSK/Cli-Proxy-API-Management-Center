@@ -435,7 +435,9 @@
     "policy_rules_hint": "Các quy tắc tùy chỉnh được ưu tiên theo thứ tự danh sách. Kế thừa hoặc danh sách trống sẽ sử dụng quy tắc kế thừa; điều này không vô hiệu hóa chúng. Mẫu biểu thức chính quy (Regex) dùng cú pháp của Go.",
     "policy_retry_invalid": "Nhập một số nguyên an toàn không âm, hoặc chọn Kế thừa.",
     "policy_aliases_invalid": "Nhập tên model và bí danh không để trống cho mỗi hàng mới hoặc đã chỉnh sửa.",
-    "policy_rules_invalid": "Hoàn thành mỗi quy tắc đã chỉnh sửa với mã trạng thái dương, một hành động và ít nhất một điều kiện khớp không để trống."
+    "policy_rules_invalid": "Hoàn thành mỗi quy tắc đã chỉnh sửa với mã trạng thái dương, một hành động và ít nhất một điều kiện khớp không để trống.",
+    "use_siwc_label": "Sử dụng SIWC (use_siwc)",
+    "use_siwc_hint": "Sử dụng thông tin xác thực SIWC đã liên kết khi bật. Tắt chỉ vô hiệu hóa SIWC và giữ nguyên dữ liệu liên kết. Hoàn tất liên kết trước khi bật."
   },
   "antigravity_subscription": {
     "plan_unknown": "Không rõ",
@@ -2301,7 +2303,12 @@
     "ineligible": "Tài khoản này không đủ điều kiện.",
     "unavailable": "Tính năng đặt lại hiện không khả dụng.",
     "rate_limited": "Yêu cầu bị giới hạn tốc độ.",
-    "auth_error": "Ủy quyền đã bị từ chối."
+    "auth_error": "Ủy quyền đã bị từ chối.",
+    "failure_organization": "Chưa gửi yêu cầu đặt lại: không thể truy vấn hoặc phân tích thông tin tổ chức ({{code}}).",
+    "failure_status": "Chưa gửi yêu cầu đặt lại: không thể kiểm tra điều kiện đặt lại mới nhất ({{code}}).",
+    "failure_eligibility": "Chưa gửi yêu cầu đặt lại: điều kiện, thời hạn hoặc thời gian chờ không hợp lệ. Hãy kiểm tra đồng hồ thiết bị ({{code}}).",
+    "failure_request_id": "Chưa gửi yêu cầu đặt lại: không thể tạo ID yêu cầu an toàn. Hãy dùng HTTPS hoặc localhost và trình duyệt được hỗ trợ ({{code}}).",
+    "failure_operation": "Chưa gửi yêu cầu đặt lại: kiểm tra thao tác đồng thời, phiên, danh tính hoặc thời hạn thử lại thất bại ({{code}})."
   },
   "gateway_usage": {
     "title": "Mức sử dụng cổng",
@@ -2336,5 +2343,39 @@
     "absent_desc": "Mức sử dụng theo người và khóa đến từ cổng kiểm soát truy cập trên cổng từ xa (https). Kết nối này không có tính năng đó.",
     "load_failed": "Không thể tải mức sử dụng: {{error}}",
     "generated_at": "Tạo lúc {{time}}"
+  },
+  "siwc": {
+    "title": "Liên kết SIWC",
+    "bind": "Liên kết SIWC",
+    "tile_caption": "Liên kết SIWC với thông tin xác thực Codex",
+    "intro": "Chọn một thông tin xác thực Codex. Sau khi bạn ủy quyền trong trình duyệt, SIWC sẽ được liên kết với nó.",
+    "target": "Thông tin xác thực",
+    "active": "Đang hoạt động",
+    "bound": "Đã liên kết · chưa bật",
+    "unbound": "Chưa liên kết",
+    "expires": "Hết hạn {{date}}",
+    "loading": "Đang tải thông tin xác thực…",
+    "no_targets": "Chưa có thông tin xác thực Codex nào có thể liên kết SIWC.",
+    "load_failed": "Không tải được thông tin xác thực. Hãy đóng và thử lại.",
+    "start": "Bắt đầu ủy quyền",
+    "starting": "Đang tạo liên kết ủy quyền…",
+    "wait": "Đang chờ ủy quyền…",
+    "cancel": "Hủy liên kết",
+    "retry": "Bắt đầu lại",
+    "step_open": "Mở trang ủy quyền và đăng nhập",
+    "open": "Mở trang ủy quyền",
+    "copy": "Sao chép liên kết",
+    "callback": "Dán URL callback",
+    "hint": "Sau khi ủy quyền, trình duyệt sẽ chuyển tới http://127.0.0.1:1455/auth/callback. Dù trang không tải được, hãy sao chép URL đầy đủ trên thanh địa chỉ và dán vào đây.",
+    "submit": "Gửi",
+    "submitted": "Đã gửi callback. Đang chờ xác nhận…",
+    "invalid_callback": "URL chưa đầy đủ: cần state khớp cùng code và client_id (hoặc lỗi OAuth).",
+    "callback_failed": "Gửi callback thất bại. Hãy kiểm tra URL và thử lại.",
+    "ok": "Đã liên kết SIWC",
+    "ok_hint": "SIWC đã được liên kết với {{name}}.",
+    "done": "Xong",
+    "error": "Liên kết thất bại. Hãy bắt đầu lại.",
+    "unsupported": "Máy chủ này không hỗ trợ liên kết SIWC.",
+    "expired": "Phiên liên kết đã hết hạn. Hãy bắt đầu lại."
   }
 }
