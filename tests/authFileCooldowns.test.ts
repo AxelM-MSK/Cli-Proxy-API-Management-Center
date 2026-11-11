@@ -225,10 +225,7 @@ describe('cooldown section rendering', () => {
 
     const available = render(snapshot, { onReset: () => {} });
     expect(available).toContain(i18n.t('auth_files.cooldown_reset_button'));
-    const hint = renderToStaticMarkup(
-      createElement('span', null, i18n.t('auth_files.cooldown_reset_hint'))
-    ).slice('<span>'.length, -'</span>'.length);
-    expect(available).toContain(hint);
+    expect(available).toContain(Bun.escapeHTML(i18n.t('auth_files.cooldown_reset_hint')));
     expect(available).not.toContain('disabled=""');
 
     const pending = render(snapshot, { onReset: () => {}, resetting: true });

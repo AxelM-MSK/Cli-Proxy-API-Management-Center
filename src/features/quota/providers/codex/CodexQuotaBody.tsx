@@ -1,13 +1,11 @@
 /**
- * Codex 额度渲染体：套餐 chip 行（elite=Pro 20x 液态铂金 / premium=金卡）、
- * 重置积分明细、用量窗口水位条。
+ * Codex 额度渲染体：套餐 chip 行（档位见 cardTier.ts）、宿主插槽、重置积分明细、用量窗口水位条。
  */
 
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodexQuotaState } from '@/types';
 import {
-  resolvePlanTier,
   buildResetDisplay,
   formatInstantShort,
   parseIsoToMs,
@@ -19,18 +17,16 @@ import { useNow } from '@/hooks/useNow';
 import { QuotaMeter } from '../../components/QuotaMeter';
 import { QuotaResetLabel } from '../../components/QuotaResetLabel';
 import { collectQuotaRowInstants, pickUrgentRowId, resetCreditRowId } from '../../resetSchedule';
-import type { QuotaBodyProps, QuotaClassMap } from '../../types';
+import { planValueClassForTier, resolveCodexCardTier } from '../../cardTier';
+import type { QuotaBodyProps } from '../../types';
 import { getCodexPlanLabel } from './planLabel';
 
-const getPlanValueClass = (planType: string | null, classes: QuotaClassMap): string => {
-  // elite/premium 顺序契约由 resolvePlanTier 承载（tests/quotaPlanTier.test.ts 守护）。
-  const tier = resolvePlanTier(planType);
-  if (tier === 'elite') return classes.elitePlanValue;
-  if (tier === 'premium') return classes.premiumPlanValue;
-  return classes.codexPlanValue;
-};
-
-export function CodexQuotaBody({ quota, classes }: QuotaBodyProps<CodexQuotaState>) {
+export function CodexQuotaBody({
+  quota,
+  classes,
+  planItems,
+  afterPlan,
+}: QuotaBodyProps<CodexQuotaState>) {
   const { t, i18n } = useTranslation();
   const now = useNow();
   const locale = i18n.resolvedLanguage;
@@ -50,7 +46,7 @@ export function CodexQuotaBody({ quota, classes }: QuotaBodyProps<CodexQuotaStat
   const rateLimitResetCreditsError = quota.rateLimitResetCreditsError ?? '';
 
   const planLabel = getCodexPlanLabel(t, planType);
-  const planValueClass = getPlanValueClass(planType, classes);
+  const planValueClass = planValueClassForTier(resolveCodexCardTier(planType), classes);
 
   // Renewal was the one date on this card in a different shape (a full
   // toLocaleString). Reformatted from the instant so it reads like the rest,
@@ -71,7 +67,8 @@ export function CodexQuotaBody({ quota, classes }: QuotaBodyProps<CodexQuotaStat
         expiryDisplay ||
         creditsUnlimited ||
         creditBalance !== null ||
-        rateLimitResetCreditsAvailableCount !== null) && (
+        rateLimitResetCreditsAvailableCount !== null ||
+        planItems) && (
         <div className={classes.codexPlan}>
           {planLabel && (
             <span className={classes.codexPlanItem}>
@@ -106,8 +103,10 @@ export function CodexQuotaBody({ quota, classes }: QuotaBodyProps<CodexQuotaStat
               </span>
             </span>
           )}
+          {planItems}
         </div>
       )}
+      {afterPlan}
       {rateLimitResetCredits.length > 0 ? (
         <div className={classes.codexResetCredits}>
           <div className={classes.codexResetCreditsTitle}>
