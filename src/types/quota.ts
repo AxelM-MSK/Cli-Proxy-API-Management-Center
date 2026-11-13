@@ -132,12 +132,14 @@ export interface ClaudeExtraUsagePayload {
 
 /** Amounts are in minor currency units, unlike the separate dollar windows. */
 export interface ClaudeExtraUsage {
+  /** Anthropic's extra-usage setting, independent of CPA credential enablement. */
   isEnabled: boolean | null;
   monthlyLimit: number | null;
   usedCredits: number | null;
   utilization: number | null;
   currency: string | null;
   disabledReason: string | null;
+  /** Raw extra_usage.user_disabled flag; never AuthFileItem.disabled. */
   userDisabled: boolean | null;
   spendLimitReached: boolean | null;
 }
@@ -308,6 +310,20 @@ export interface CodexQuotaState {
   errorStatus?: number;
 }
 
+/**
+ * Session knowledge of the account-level "use credits after the usage limit" setting.
+ * This feature records confirmed writes; an absent entry means the value is unknown.
+ */
+export type CodexCreditOverageEntry =
+  | { status: 'writing'; target: boolean }
+  | { status: 'known'; value: boolean; at: number }
+  | { status: 'unconfirmed'; target: boolean; at: number };
+
+/** Account-wide mutex and unresolved-write journal, separate from user snapshots. */
+export type CodexCreditOverageOperation =
+  | { status: 'writing'; target: boolean; unconfirmed: boolean }
+  | { status: 'unconfirmed'; target: boolean; at: number };
+
 export interface DevinQuotaWindow {
   id: 'daily' | 'weekly';
   label?: string;
@@ -424,6 +440,8 @@ export interface KimiQuotaRow {
 export interface KimiQuotaState {
   status: 'idle' | 'loading' | 'success' | 'error';
   rows: KimiQuotaRow[];
+  /** Official user_level_name from /me; absent for unavailable account information. */
+  planName?: string | null;
   error?: string;
   errorStatus?: number;
 }
