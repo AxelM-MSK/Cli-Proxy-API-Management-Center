@@ -11,7 +11,7 @@ describe('upstream quota card integration', () => {
     expect(source).not.toMatch(/^(<<<<<<<|=======|>>>>>>>)/m);
     expect(source).toContain("entry.type === 'claude' && hasClaudeUsageData(quota as ClaudeQuotaState | undefined)");
     expect(source).toContain('const displayName = props.displayName ?? getQuotaDisplayName(file);');
-    expect(source).toContain('{retainedClaudeUsage && quota && <adapter.Body');
+    expect(source).toMatch(/\{retainedClaudeUsage && quota && \(\s*<adapter\.Body/);
     expect(source).toContain('loading && !retainedClaudeUsage');
   });
 });
