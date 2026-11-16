@@ -14,10 +14,18 @@ import i18n from '@/i18n';
 import { CodexQuotaBody } from '@/features/quota/providers/codex/CodexQuotaBody';
 import { ClaudeQuotaBody } from '@/features/quota/providers/claude/ClaudeQuotaBody';
 import { KimiQuotaBody } from '@/features/quota/providers/kimi/KimiQuotaBody';
+import { AntigravityQuotaBody } from '@/features/quota/providers/antigravity/AntigravityQuotaBody';
+import { PluginQuotaBody } from '@/features/quota/providers/plugin/PluginQuotaBody';
 import { QUOTA_CLASS_KEYS, bindQuotaClasses } from '@/features/quota/types';
 import { formatInstantShort } from '@/utils/quota';
 import { DAY_MS, HOUR_MS } from '@/utils/time/durations';
-import type { ClaudeQuotaState, CodexQuotaState, KimiQuotaState } from '@/types';
+import type {
+  AntigravityQuotaState,
+  ClaudeQuotaState,
+  CodexQuotaState,
+  KimiQuotaState,
+  PluginQuotaState,
+} from '@/types';
 
 const classes = bindQuotaClasses(
   Object.fromEntries(QUOTA_CLASS_KEYS.map((key) => [key, key])),
@@ -61,7 +69,7 @@ describe('CodexQuotaBody', () => {
   };
 
   test.each(['en', 'zh-CN', 'zh-TW', 'ru'])(
-    'renders Business Premium with its premium badge in %s',
+    'renders Business Premium as a plain plan in %s',
     async (language) => {
       await i18n.changeLanguage(language);
       try {
@@ -69,7 +77,7 @@ describe('CodexQuotaBody', () => {
           const markup = renderToStaticMarkup(
             createElement(CodexQuotaBody, { quota: { ...quota, planType }, classes })
           );
-          expect(markup).toContain('<span class="premiumPlanValue">Business Premium</span>');
+          expect(markup).toContain('<span class="codexPlanValue">Business Premium</span>');
           expect(markup).not.toContain('self_serve_business_prolite');
         }
       } finally {
@@ -79,7 +87,8 @@ describe('CodexQuotaBody', () => {
   );
 
   test.each([
-    ['pro', 'Pro 200', 'elitePlanValue'],
+    ['promax', 'Pro 500', 'elitePlanValue'],
+    ['pro', 'Pro 200', 'premiumPlanValue'],
     ['prolite', 'Pro 100', 'premiumPlanValue'],
     ['team', 'Team', 'codexPlanValue'],
     ['self_serve_business_usage_based', 'self_serve_business_usage_based', 'codexPlanValue'],
@@ -256,5 +265,55 @@ describe('ClaudeQuotaBody', () => {
     expect(markup).toContain('08-06 04:00');
     expect(markup).toMatch(/2 hours/);
     expect(markup).toMatch(/4 days/);
+  });
+});
+
+describe('quota group notes', () => {
+  const bucket = { id: 'b1', label: 'Daily', remainingFraction: 0.6 };
+
+  test('Antigravity puts "models in this group" behind an InfoTip after the group title', () => {
+    const quota: AntigravityQuotaState = {
+      status: 'success',
+      groups: [
+        {
+          id: 'g1',
+          label: 'Custom group',
+          description: 'Models within this group: model-a, model-b',
+          buckets: [bucket],
+        },
+        { id: 'g2', label: 'Bare group', buckets: [{ ...bucket, id: 'b2' }] },
+      ],
+    };
+    const markup = renderToStaticMarkup(createElement(AntigravityQuotaBody, { quota, classes }));
+    const note = i18n.t('antigravity_quota.group_models_description', {
+      models: 'model-a, model-b',
+    });
+    // Title, then the InfoTip as its sibling; no visible description line under the title.
+    expect(markup).toContain(
+      '<span class="antigravityQuotaGroupTitle">Custom group</span><button type="button" data-info-tip=""'
+    );
+    expect(markup).toContain(
+      `aria-label="${i18n.t('common.more_info_about', { label: 'Custom group' })}"`
+    );
+    expect(markup).toContain(`hidden="">${note}</span>`);
+    expect(markup).not.toContain('antigravityQuotaGroupDescription');
+    // A group without a description gets no icon.
+    expect(markup.match(/data-info-tip=""/g)).toHaveLength(1);
+  });
+
+  test('plugin groups carry their description the same way', () => {
+    const quota: PluginQuotaState = {
+      status: 'success',
+      summary: [],
+      groups: [
+        { id: 'g1', label: 'Credits', description: 'Shared by every model', buckets: [bucket] },
+      ],
+    };
+    const markup = renderToStaticMarkup(createElement(PluginQuotaBody, { quota, classes }));
+    expect(markup).toContain(
+      '<span class="antigravityQuotaGroupTitle">Credits</span><button type="button" data-info-tip=""'
+    );
+    expect(markup).toContain('hidden="">Shared by every model</span>');
+    expect(markup).not.toContain('antigravityQuotaGroupDescription');
   });
 });
