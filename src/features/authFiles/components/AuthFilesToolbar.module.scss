@@ -25,6 +25,9 @@
     height: 36px;
     border-radius: 10px;
     font-size: 13px;
+    /* 为右侧搜索图标留出空间，避免与占位符/输入文字重叠 */
+    padding-right: 34px;
+    text-overflow: ellipsis;
   }
 }
 
@@ -184,6 +187,10 @@
   gap: 12px;
   font-size: 12.5px;
   color: var(--text-secondary);
+}
+
+.popoverRow > span {
+  white-space: nowrap;
 }
 
 .pageSizeInput {
