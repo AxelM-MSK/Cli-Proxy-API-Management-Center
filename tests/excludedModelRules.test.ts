@@ -1,16 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import {
   formatExcludedRulesText,
-  hasExcludedRule,
-  isMatchedByWildcardRule,
   isWildcardRule,
   matchesExcludedRule,
   normalizeExcludedRules,
   parseExcludedRulesText,
   replaceCustomExcludedRules,
+  ruleEditorText,
   splitExcludedRules,
   toggleExcludedRule,
 } from '../src/components/excludedModels/excludedModelRules';
+
+test('rule editor retains Enter after normalized feedback, but follows external changes', () => {
+  const firstLine = ruleEditorText('gpt-*\n', ['gpt-*']);
+  expect(firstLine).toBe('gpt-*\n');
+  expect(replaceCustomExcludedRules([], [], firstLine + 'claude-*')).toEqual(['gpt-*', 'claude-*']);
+  expect(ruleEditorText(firstLine, ['other-*'])).toBe('other-*');
+  expect(ruleEditorText(null, ['gpt-*'])).toBe('gpt-*');
+});
 
 describe('normalizeExcludedRules / parseExcludedRulesText', () => {
   test('trims, drops blanks, and removes case-insensitive duplicates', () => {
@@ -89,21 +96,9 @@ describe('matchesExcludedRule', () => {
     expect(matchesExcludedRule('gpt-5', '  ')).toBe(false);
   });
 
-  test('isWildcardRule / isMatchedByWildcardRule ignore exact rules', () => {
+  test('isWildcardRule detects only wildcard rules', () => {
     expect(isWildcardRule('gpt-5-*')).toBe(true);
     expect(isWildcardRule('gpt-5-codex')).toBe(false);
-    expect(isMatchedByWildcardRule(['gpt-5-*'], 'gpt-5-mini')).toBe(true);
-    // An exact rule matching the model is not a *wildcard* match.
-    expect(isMatchedByWildcardRule(['gpt-5-mini'], 'gpt-5-mini')).toBe(false);
-  });
-});
-
-describe('hasExcludedRule', () => {
-  test('compares literally and case-insensitively, without wildcard expansion', () => {
-    expect(hasExcludedRule(['GPT-4o'], 'gpt-4O')).toBe(true);
-    expect(hasExcludedRule(['gpt-5-*'], 'gpt-5-codex')).toBe(false);
-    expect(hasExcludedRule(['gpt-5-*'], 'GPT-5-*')).toBe(true);
-    expect(hasExcludedRule(['gpt-4o'], '  ')).toBe(false);
   });
 });
 

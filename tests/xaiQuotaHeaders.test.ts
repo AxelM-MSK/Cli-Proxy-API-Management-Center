@@ -9,9 +9,7 @@ describe('Grok quota client headers', () => {
   test('meets the upstream minimum client version of 1.0.13', () => {
     expect(XAI_GROK_CLIENT_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     const [major, minor, patch] = XAI_GROK_CLIENT_VERSION.split('.').map(Number);
-    expect(major > 1 || (major === 1 && (minor > 0 || (minor === 0 && patch >= 13)))).toBe(
-      true
-    );
+    expect(major > 1 || (major === 1 && (minor > 0 || (minor === 0 && patch >= 13)))).toBe(true);
     expect(XAI_REQUEST_HEADERS['x-grok-client-version']).toBe(XAI_GROK_CLIENT_VERSION);
   });
 

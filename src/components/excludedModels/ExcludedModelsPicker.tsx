@@ -1,14 +1,15 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconAlertTriangle, IconChevronDown, IconLoader2 } from '@/components/ui/icons';
+import { FieldLabel } from '@/components/ui/FieldLabel';
 import { ExcludedModelChipRow, ExcludedModelRuleChip } from './ExcludedModelRuleChip';
 import { ExcludedModelsPanel, type ExcludedModelCandidate } from './ExcludedModelsPanel';
 import {
-  formatExcludedRulesText,
   getModelExclusionState,
   matchedModelsByRule,
   normalizeExcludedRules,
   replaceCustomExcludedRules,
+  ruleEditorText,
   splitExcludedRules,
   summarizeExclusion,
   toggleExcludedRule,
@@ -63,6 +64,7 @@ export function ExcludedModelsPicker({
   const panelId = `${baseId}-panel`;
   const listboxId = `${baseId}-listbox`;
   const [open, setOpen] = useState(false);
+  const [ruleDraft, setRuleDraft] = useState<string | null>(null);
   const [reservedHit, setReservedHit] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -126,6 +128,7 @@ export function ExcludedModelsPicker({
     const typedReserved = text
       .split(/\r?\n/)
       .some((line) => reservedKeys.has(line.trim().toLowerCase()));
+    setRuleDraft(text);
     setReservedHit(typedReserved);
     commit(replaceCustomExcludedRules(rules, candidateIds, text));
   };
@@ -274,13 +277,21 @@ export function ExcludedModelsPicker({
 
       {showRuleEditor ? (
         <div className={styles.ruleEditor}>
-          <label className={styles.ruleLabel} htmlFor={`${baseId}-rules`}>
-            {t('excluded_models.rules_label')}
-          </label>
+          {/* 通配语义（* 与大小写）收进提示；textarea 仍由说明副本描述。 */}
+          <FieldLabel
+            htmlFor={`${baseId}-rules`}
+            label={t('excluded_models.rules_label')}
+            hint={t('excluded_models.rules_hint')}
+            hintId={`${baseId}-rules-hint`}
+            className={styles.ruleLabelRow}
+            labelClassName={styles.ruleLabel}
+          />
           <textarea
             id={`${baseId}-rules`}
             className="input"
-            value={formatExcludedRulesText(customRules)}
+            aria-describedby={`${baseId}-rules-hint`}
+            value={ruleEditorText(ruleDraft, customRules)}
+            onBlur={() => setRuleDraft(null)}
             placeholder={t('excluded_models.rules_placeholder')}
             rows={3}
             disabled={disabled}
@@ -310,8 +321,6 @@ export function ExcludedModelsPicker({
               ))}
             </ul>
           ) : null}
-
-          <p className="hint">{t('excluded_models.rules_hint')}</p>
         </div>
       ) : null}
     </div>
