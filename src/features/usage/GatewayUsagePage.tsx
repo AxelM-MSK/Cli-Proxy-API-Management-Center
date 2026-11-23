@@ -1,17 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconRefreshCw } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/Table';
+
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { formatDateTimeValue } from '@/utils/format';
 import { compactNumber } from '@/features/quota/foundryUsage';
@@ -24,6 +17,26 @@ import { useGatewayUsage } from './useGatewayUsage';
 import styles from './GatewayUsagePage.module.scss';
 
 const DEFAULT_DAYS = 7;
+
+// The upstream workbench no longer ships the generic Table primitive. Keep the
+// ledger branch's usage view on semantic table markup with page-local styling.
+function Table({ className, ...props }: ComponentProps<'table'>) {
+  return (
+    <div className={styles.tableWrap}>
+      <table className={[styles.table, className].filter(Boolean).join(' ')} {...props} />
+    </div>
+  );
+}
+
+const TableHeader = (props: ComponentProps<'thead'>) => <thead {...props} />;
+const TableBody = (props: ComponentProps<'tbody'>) => <tbody {...props} />;
+const TableRow = (props: ComponentProps<'tr'>) => <tr {...props} />;
+function TableCell({ alignRight, className, ...props }: ComponentProps<'td'> & { alignRight?: boolean }) {
+  return <td className={[alignRight ? styles.alignRight : '', className].filter(Boolean).join(' ')} {...props} />;
+}
+function TableHead({ alignRight, className, ...props }: ComponentProps<'th'> & { alignRight?: boolean }) {
+  return <th className={[alignRight ? styles.alignRight : '', className].filter(Boolean).join(' ')} {...props} />;
+}
 
 function ModelsCell({ totals }: { totals: UsageTotals }) {
   const top = totals.models.slice(0, 3);
