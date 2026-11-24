@@ -8,13 +8,18 @@ import { isRecord } from './helpers';
 export interface ModelInfo {
   name: string;
   alias?: string;
+  displayName?: string;
   description?: string;
 }
 
 const MODEL_CATEGORIES = [
   { id: 'devin', label: 'Devin', patterns: [] },
   { id: 'meta', label: 'Muse', patterns: [/\bmuse(?:[-/\s]|$)/i] },
-  { id: 'gpt', label: 'GPT', patterns: [/gpt/i, /\bo\d\b/i, /\bo\d+\.?/i, /\bchatgpt/i] },
+  {
+    id: 'gpt',
+    label: 'GPT',
+    patterns: [/gpt/i, /\bo\d\b/i, /\bo\d+\.?/i, /\bchatgpt/i, /\bcodex(?:[-/_]|$)/i],
+  },
   { id: 'claude', label: 'Claude', patterns: [/claude/i] },
   { id: 'gemini', label: 'Gemini', patterns: [/gemini/i, /\bgai\b/i] },
   { id: 'kimi', label: 'Kimi', patterns: [/kimi/i] },
@@ -23,6 +28,12 @@ const MODEL_CATEGORIES = [
   { id: 'grok', label: 'Grok', patterns: [/grok/i] },
   { id: 'deepseek', label: 'DeepSeek', patterns: [/deepseek/i] },
   { id: 'minimax', label: 'MiniMax', patterns: [/minimax/i, /abab/i] },
+  { id: 'xiaomi', label: 'Xiaomi', patterns: [/xiaomi/i, /\bmimo\b/i, /小米/] },
+  {
+    id: 'stepfun',
+    label: 'StepFun',
+    patterns: [/stepfun/i, /\bstep[-_.]?(?:\d|r1|audio|1o|tts|asr|router)/i, /阶跃/],
+  },
 ];
 
 const matchCategory = (text: string) => {
@@ -45,11 +56,15 @@ export function normalizeModelList(payload: unknown, { dedupe = false } = {}): M
     const name = entry.id || entry.name || entry.model || entry.value;
     if (!name) return null;
 
-    const alias = entry.alias || entry.display_name || entry.displayName;
+    const alias = entry.alias;
+    const displayName = entry.display_name || entry.displayName;
     const description = entry.description || entry.note || entry.comment;
     const model: ModelInfo = { name: String(name) };
     if (alias && alias !== name) {
       model.alias = String(alias);
+    }
+    if (displayName && displayName !== name) {
+      model.displayName = String(displayName);
     }
     if (description) {
       model.description = String(description);
@@ -105,8 +120,8 @@ export function classifyModels(
 
   models.forEach((model) => {
     const name = (model?.name || '').toString();
-    const alias = (model?.alias || '').toString();
-    const haystack = `${name} ${alias}`.toLowerCase();
+    const label = model?.alias || model?.displayName || '';
+    const haystack = `${name} ${label}`.toLowerCase();
     const matchedId = /^devin\//i.test(name) ? 'devin' : matchCategory(haystack);
     const target = matchedId ? groups.find((group) => group.id === matchedId) : null;
 
